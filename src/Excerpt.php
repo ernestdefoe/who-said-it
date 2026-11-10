@@ -19,7 +19,7 @@ final class Excerpt
 
     /** Whole elements whose words aren't the author's own, or aren't words. */
     private const DROP = [
-        'blockquote', 'a', 'pre', 'code', 'img', 'picture', 'figure', 'iframe', 'video', 'audio', 'script',
+        'blockquote', 'pre', 'code', 'img', 'picture', 'figure', 'iframe', 'video', 'audio', 'script',
         'style', 'details', 'summary', 'table', 'svg', 'button', 'form', 'input', 'select', 'textarea',
         'object', 'embed', 'aside', 'sup', 'math', 'noscript', 'template',
     ];
@@ -54,6 +54,13 @@ final class Excerpt
             $node->parentNode?->removeChild($node);
         }
 
+        // A link keeps its words ("read the [handout] on…"), unless the words are the address itself.
+        foreach (iterator_to_array($xpath->query('.//a', $root)) as $link) {
+            $words = trim($link->textContent);
+            $keep = $words !== '' && ! preg_match('~^(?:https?://|www\.)|^\S+\.\S+/~iu', $words);
+            $link->parentNode?->replaceChild($doc->createTextNode($keep ? $link->textContent : ''), $link);
+        }
+
         $text = self::text($root);
         $text = preg_replace('~(?:https?://|www\.)\S+~iu', '', $text) ?? '';
         $text = preg_replace('/\s+/u', ' ', $text) ?? '';
@@ -82,6 +89,15 @@ final class Excerpt
         }
 
         return $out;
+    }
+
+    /**
+     * Whether the cleaned words still read as a sentence: taking something
+     * out mid-sentence leaves "the , and" or "( )", which makes a poor quote.
+     */
+    public static function reads(string $text): bool
+    {
+        return ! preg_match('/\s[,.;:!?)]|\(\s*\)|\[\s*\]/u', $text);
     }
 
     /** At most $max characters, cut after a sentence when one ends late enough, else between words. */

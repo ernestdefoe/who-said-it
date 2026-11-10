@@ -153,7 +153,7 @@ class Generator
             }
 
             $excerpt = Excerpt::fromHtml($post->formatContent(), [$author->username, $author->display_name]);
-            if (mb_strlen($excerpt) < $minLength) {
+            if (mb_strlen($excerpt) < $minLength || ! Excerpt::reads($excerpt)) {
                 continue;
             }
 

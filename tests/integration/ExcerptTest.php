@@ -18,7 +18,9 @@ class ExcerptTest extends TestCase
 
         $text = Excerpt::fromHtml($html, ['dana']);
 
-        $this->assertSame('Thanks , I agree. See and My name is […] and I & my team loved it. one two', $text);
+        $this->assertSame('Thanks , I agree. See this link and My name is […] and I & my team loved it. one two', $text);
+        $this->assertFalse(Excerpt::reads($text), 'the removed mention left a gap: not used as a quote');
+        $this->assertTrue(Excerpt::reads('See this link and my team loved it.'));
     }
 
     #[Test]
