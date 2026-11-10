@@ -66,7 +66,7 @@ php flarum cache:clear
 
 ## Light on your forum
 
-About 4 KB (gzipped) on every page; the quiz page loads only when someone opens it. The sidebar card is drawn from the forum payload: one small query for a signed-in member, none for guests.
+About 4 KB of script and 3 KB of styles (gzipped) on every page; the quiz page itself loads only when someone opens it. The sidebar card is drawn from the forum payload: one small query for a signed-in member, none for guests.
 
 ## Links
 
