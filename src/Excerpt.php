@@ -28,8 +28,10 @@ final class Excerpt
 
     /**
      * @param list<string> $names The author's own names, blanked out so the quote can't give itself away.
+     * @param string|null $source The post as stored: a paragraph whose words aren't in it was added
+     *                            by an extension at render time (a disclosure, a notice) and is dropped.
      */
-    public static function fromHtml(string $html, array $names = [], int $max = self::MAX): string
+    public static function fromHtml(string $html, array $names = [], int $max = self::MAX, ?string $source = null): string
     {
         if (trim($html) === '') {
             return '';
@@ -54,6 +56,16 @@ final class Excerpt
             $node->parentNode?->removeChild($node);
         }
 
+        if ($source !== null) {
+            $own = self::squash(html_entity_decode(strip_tags($source), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            foreach (iterator_to_array($xpath->query('.//p | .//li | .//div[not(.//p)]', $root)) as $block) {
+                $words = self::squash($block->textContent);
+                if ($words !== '' && ! str_contains($own, $words)) {
+                    $block->parentNode?->removeChild($block);
+                }
+            }
+        }
+
         // A link keeps its words ("read the [handout] on…"), unless the words are the address itself.
         foreach (iterator_to_array($xpath->query('.//a', $root)) as $link) {
             $words = trim($link->textContent);
@@ -74,6 +86,11 @@ final class Excerpt
         $text = mb_strtoupper(mb_substr($text, 0, 1)).mb_substr($text, 1);
 
         return self::shorten($text, $max);
+    }
+
+    private static function squash(string $text): string
+    {
+        return mb_strtolower(preg_replace('/\s+/u', ' ', trim($text)) ?? '');
     }
 
     private static function text(DOMNode $node): string

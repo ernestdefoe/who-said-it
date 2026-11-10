@@ -30,6 +30,15 @@ class ExcerptTest extends TestCase
     }
 
     #[Test]
+    public function words_an_extension_adds_when_rendering_are_not_the_authors()
+    {
+        $stored = '<r><p>Here is the <URL url="https://x.test">whole setup</URL> in the back office.</p></r>';
+        $html = '<p class="Linkwright-disclosure">This post contains affiliate links.</p><p>Here is the <a href="https://x.test">whole setup</a> in the back office.</p>';
+
+        $this->assertSame('Here is the whole setup in the back office.', Excerpt::fromHtml($html, [], Excerpt::MAX, $stored));
+    }
+
+    #[Test]
     public function long_posts_end_at_a_sentence_or_a_word()
     {
         $sentence = str_repeat('word ', 30).'end. '.str_repeat('more ', 40);

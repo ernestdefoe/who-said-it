@@ -152,7 +152,7 @@ class Generator
                 continue;
             }
 
-            $excerpt = Excerpt::fromHtml($post->formatContent(), [$author->username, $author->display_name]);
+            $excerpt = Excerpt::fromHtml($post->formatContent(), [$author->username, $author->display_name], Excerpt::MAX, (string) $post->getRawOriginal('content'));
             if (mb_strlen($excerpt) < $minLength || ! Excerpt::reads($excerpt)) {
                 continue;
             }
