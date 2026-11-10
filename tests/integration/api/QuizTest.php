@@ -9,6 +9,7 @@ use ErnestDefoe\WhoSaidIt\Generator;
 use ErnestDefoe\WhoSaidIt\Job\SendReminders;
 use ErnestDefoe\WhoSaidIt\Player;
 use ErnestDefoe\WhoSaidIt\Question;
+use ErnestDefoe\WhoSaidIt\Quiz;
 use ErnestDefoe\WhoSaidIt\Score;
 use ErnestDefoe\WhoSaidIt\Scoring;
 use Flarum\Discussion\Discussion;
@@ -398,6 +399,156 @@ class QuizTest extends TestCase
             $this->assertSame([], array_intersect([3, 5], $q->choiceIds()), 'never shown as a choice either');
         }
         $this->assertSame(5, Question::query()->count(), 'the other five authors still fill the day');
+    }
+
+    #[Test]
+    public function deleting_a_member_never_touches_flarum_gdpr()
+    {
+        $day = $this->make();
+        $q = Question::query()->where('day_id', $day->id)->first();
+        $response = $this->send($this->request('DELETE', '/api/users/'.$q->author_id, ['authenticatedAs' => 1]));
+
+        $this->assertSame(204, $response->getStatusCode());
+        // The GDPR data type extends flarum/gdpr's class: loading it on a forum without that package is a 500.
+        $this->assertFalse(class_exists(\ErnestDefoe\WhoSaidIt\Gdpr\WhoSaidItData::class, false));
+    }
+
+    #[Test]
+    public function opting_out_takes_a_member_out_of_todays_and_yesterdays_quiz_at_once()
+    {
+        $day = $this->make();
+        [$q1, $q2] = Question::query()->where('day_id', $day->id)->orderBy('position')->take(2)->get()->all();
+        // Played the first quote already; its author and one of the second quote's faces then opt out.
+        $this->next();
+        $this->api('POST', '/answer', 2, ['question' => $q1->id, 'choice' => $q1->author_id]);
+        $face = current(array_diff($q2->choiceIds(), [$q2->author_id, $q1->author_id]));
+        $this->assertSame(200, $this->api('POST', '/me', $q1->author_id, ['optedOut' => true])[0]);
+        $this->assertSame(200, $this->api('POST', '/me', $face, ['optedOut' => true])[0]);
+
+        [, $next, $raw] = $this->next();
+        $this->assertSame($q2->id, $next['current']['id']);
+        $this->assertContains(0, $next['current']['choices'], 'the opted-out face is a blank');
+        $this->assertNotContains($face, $next['current']['choices']);
+
+        [, $page, $pageRaw] = $this->api('GET', '', 2);
+        $this->assertTrue($page['played'][0]['withdrawn']);
+        $this->assertSame('', $page['played'][0]['excerpt']);
+        $this->assertSame([], $page['played'][0]['choices']);
+        $this->assertStringNotContainsString($q1->excerpt, $pageRaw);
+
+        // Yesterday's answers, already cached, are drawn again without them.
+        Day::query()->whereKey($day->id)->update(['day' => Carbon::now()->subDay()->toDateString()]);
+        $this->api('POST', '/me', $q1->author_id, ['optedOut' => false]);
+        [, $before] = $this->api('GET', '', null);
+        $this->assertFalse($before['yesterday']['questions'][0]['withdrawn']);
+        $this->api('POST', '/me', $q1->author_id, ['optedOut' => true]);
+        [, $after, $afterRaw] = $this->api('GET', '', null);
+        $this->assertTrue($after['yesterday']['questions'][0]['withdrawn']);
+        $this->assertStringNotContainsString($q1->excerpt, $afterRaw);
+    }
+
+    #[Test]
+    public function a_never_quote_group_set_later_withdraws_their_quotes_too()
+    {
+        $day = $this->make();
+        $q = Question::query()->where('day_id', $day->id)->orderBy('position')->first();
+        $this->database()->table('group_user')->insert(['user_id' => $q->author_id, 'group_id' => 4]);
+        $response = $this->send($this->request('POST', '/api/settings', ['authenticatedAs' => 1, 'json' => ['ernestdefoe-who-said-it.never_quote_groups' => json_encode([4])]]));
+        $this->assertSame(204, $response->getStatusCode());
+
+        $this->assertNotSame($q->id, $this->next()[1]['current']['id'], 'their quote is skipped');
+    }
+
+    #[Test]
+    public function a_suspended_member_is_neither_quoted_nor_a_choice()
+    {
+        $this->extension('flarum-tags', 'flarum-suspend', 'ernestdefoe-who-said-it');
+        $this->app();
+        User::query()->whereIn('id', [3, 5])->update(['suspended_until' => Carbon::now()->addWeek()]);
+
+        $this->make();
+        $this->assertSame(0, Question::query()->whereIn('author_id', [3, 5])->count());
+        foreach (Question::query()->get() as $q) {
+            $this->assertSame([], array_intersect([3, 5], $q->choiceIds()));
+        }
+    }
+
+    #[Test]
+    public function an_edit_that_takes_the_words_out_withdraws_the_quote()
+    {
+        $day = $this->make();
+        $q = Question::query()->where('day_id', $day->id)->orderBy('position')->first();
+        Post::query()->whereKey($q->post_id)->update(['content' => '<t><p>[edited: removed]</p></t>']);
+
+        $this->assertNotSame($q->id, $this->next()[1]['current']['id']);
+
+        // Formatting the same words differently is not a change.
+        $other = Question::query()->where('day_id', $day->id)->where('position', 3)->first();
+        $text = Post::query()->whereKey($other->post_id)->value('content');
+        Post::query()->whereKey($other->post_id)->update(['content' => str_replace('honestly', '<STRONG><s>**</s>honestly<e>**</e></STRONG>', $text)]);
+        $this->assertArrayHasKey($other->id, $this->app()->getContainer()->make(Quiz::class)->live(Question::query()->whereKey($other->id)->get()));
+    }
+
+    #[Test]
+    public function the_other_faces_look_like_the_author()
+    {
+        $this->prepareDatabase([User::class => [
+            ['id' => 21, 'username' => 'quiet1', 'email' => 'q1@machine.local', 'is_email_confirmed' => 1, 'comment_count' => 12, 'last_seen_at' => Carbon::now()->subYear(), 'joined_at' => Carbon::now()->subYears(2)],
+            ['id' => 22, 'username' => 'quiet2', 'email' => 'q2@machine.local', 'is_email_confirmed' => 0, 'comment_count' => 12, 'last_seen_at' => Carbon::now()->subYear(), 'joined_at' => Carbon::now()->subYears(2)],
+            ['id' => 23, 'username' => 'newcomer', 'email' => 'n@machine.local', 'is_email_confirmed' => 1, 'comment_count' => 14, 'last_seen_at' => Carbon::now(), 'joined_at' => Carbon::now()->subDay()],
+        ]]);
+        $this->app();
+        // Author 3 (and 20) went quiet a year ago, like 21 and 22; the rest are around today.
+        User::query()->whereIn('id', [3, 20])->update(['last_seen_at' => Carbon::now()->subYear()]);
+
+        $this->make();
+        foreach (Question::query()->get() as $q) {
+            $others = array_values(array_diff($q->choiceIds(), [$q->author_id]));
+            $this->assertNotContains(23, $others, 'joined after the post was written');
+            if ($q->author_id === 3) {
+                $this->assertEqualsCanonicalizing([20, 21, 22], $others, 'quiet beside quiet, confirmed or not');
+            } else {
+                $this->assertSame([], array_intersect([3, 20, 21, 22], $others), 'active beside active');
+            }
+        }
+    }
+
+    #[Test]
+    public function a_day_left_unfinished_still_counts_and_keeps_the_streak()
+    {
+        $day = $this->make();
+        for ($i = 0; $i < 2; $i++) {
+            $q = Question::query()->find($this->next()[1]['current']['id']);
+            $this->api('POST', '/answer', 2, ['question' => $q->id, 'choice' => $q->author_id]);
+        }
+        $this->next(3); // opened, answered nothing
+        Day::query()->whereKey($day->id)->update(['day' => Carbon::now()->subDay()->toDateString()]);
+
+        $this->app()->getContainer()->make(Quiz::class)->settle();
+
+        $score = Score::query()->where('user_id', 2)->first();
+        $this->assertNotNull($score->finished_at);
+        $this->assertSame(2, $score->answered);
+        $player = Player::query()->find(2);
+        $this->assertSame(1, $player->streak);
+        $this->assertSame($score->score, $player->total_score);
+        $this->assertSame(0, Score::query()->where('user_id', 3)->count(), 'a day with nothing answered is dropped');
+    }
+
+    #[Test]
+    public function while_another_request_makes_the_quiz_it_is_on_its_way()
+    {
+        $this->app();
+        $lock = $this->app()->getContainer()->make('cache.store')->getStore()->lock('ernestdefoe-who-said-it.make.'.Carbon::now()->toDateString(), 120);
+        $this->assertTrue($lock->get());
+
+        [, $page] = $this->api('GET', '', 2);
+        $this->assertNull($page['day']);
+        $this->assertTrue($page['pending']);
+        [$status, $body] = $this->api('POST', '/next', 2);
+        $this->assertSame(503, $status);
+        $this->assertSame('wsi_making', $body['errors'][0]['code']);
+        $lock->release();
     }
 
     #[Test]

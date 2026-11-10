@@ -28,9 +28,11 @@ class NextController implements RequestHandlerInterface
         $actor->assertRegistered();
         $actor->assertCan(Settings::PLAY);
 
-        $day = $this->quiz->generator()->today();
+        $this->quiz->settle($actor->id);
+        $generator = $this->quiz->generator();
+        $day = $generator->today();
         if (! $day) {
-            return Errors::make(404, 'wsi_no_quiz');
+            return $generator->busy ? Errors::make(503, 'wsi_making') : Errors::make(404, 'wsi_no_quiz');
         }
 
         $next = $this->quiz->next($day, $actor);

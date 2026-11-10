@@ -3,8 +3,8 @@
 namespace ErnestDefoe\WhoSaidIt\Gdpr;
 
 use ErnestDefoe\WhoSaidIt\Answer;
+use ErnestDefoe\WhoSaidIt\Forget;
 use ErnestDefoe\WhoSaidIt\Player;
-use ErnestDefoe\WhoSaidIt\Question;
 use ErnestDefoe\WhoSaidIt\Score;
 use Flarum\Gdpr\Data\Type;
 
@@ -51,14 +51,6 @@ class WhoSaidItData extends Type
 
     public function delete(): void
     {
-        self::forget($this->user->id);
-    }
-
-    public static function forget(int $userId): void
-    {
-        Answer::query()->where('user_id', $userId)->delete();
-        Score::query()->where('user_id', $userId)->delete();
-        Player::query()->whereKey($userId)->delete();
-        Question::query()->where('author_id', $userId)->update(['excerpt' => '', 'author_id' => null, 'post_id' => null]);
+        resolve(Forget::class)($this->user->id);
     }
 }

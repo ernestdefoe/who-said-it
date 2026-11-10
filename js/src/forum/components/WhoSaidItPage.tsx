@@ -38,6 +38,7 @@ export default class WhoSaidItPage extends Page {
   copied = false;
   remindSaving = false;
   ticker = 0;
+  retry = 0;
   keys = (e: KeyboardEvent) => this.onKey(e);
 
   oninit(vnode: Mithril.Vnode<any, this>) {
@@ -58,6 +59,7 @@ export default class WhoSaidItPage extends Page {
     super.onremove(vnode);
     document.removeEventListener('keydown', this.keys);
     window.clearInterval(this.ticker);
+    window.clearTimeout(this.retry);
   }
 
   load() {
@@ -69,6 +71,8 @@ export default class WhoSaidItPage extends Page {
         if (data.current) this.show(data.current);
         else if (data.me?.finished) this.phase = 'done';
         else this.phase = 'intro';
+        // Another visitor is making today's quiz this very moment: ask again shortly.
+        if (data.pending) this.retry = window.setTimeout(() => this.load(), 4000);
       })
       .catch(() => (this.phase = 'error'))
       .finally(() => m.redraw());
@@ -140,7 +144,13 @@ export default class WhoSaidItPage extends Page {
 
   stage(data: PageData): Mithril.Children {
     if (!data.day) {
-      return (
+      return data.pending ? (
+        <div className="WsiNote">
+          <Icon name="fas fa-hourglass-half" />
+          <h2>{t('forum.card.soon')}</h2>
+          <LoadingIndicator display="inline" size="small" />
+        </div>
+      ) : (
         <div className="WsiNote">
           <Icon name="fas fa-hourglass-half" />
           <h2>{t('forum.stage.none_title')}</h2>
@@ -279,7 +289,7 @@ export default class WhoSaidItPage extends Page {
       <button
         type="button"
         className={classList('WsiChoice', state && `is-${state}`)}
-        disabled={!!r || this.busy}
+        disabled={!!r || this.busy || !id}
         aria-pressed={isPicked ? 'true' : 'false'}
         onclick={() => this.answer(id)}
       >
@@ -288,7 +298,7 @@ export default class WhoSaidItPage extends Page {
         </span>
         <Avatar user={u} className="WsiChoice-avatar" />
         <span className="WsiChoice-names">
-          <span className="WsiChoice-name">{u ? u.displayName() : t('forum.stage.deleted')}</span>
+          <span className="WsiChoice-name">{u ? u.displayName() : t(id ? 'forum.stage.deleted' : 'forum.stage.left')}</span>
           {u ? <span className="WsiChoice-user">@{u.username()}</span> : null}
         </span>
         {r && isAuthor ? <Icon name="fas fa-check" className="WsiChoice-mark" /> : null}

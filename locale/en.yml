@@ -11,8 +11,8 @@ ernestdefoe-who-said-it:
       min_length_help: Measured after quotes of other posts, links, code and spoilers are taken out.
       repeat: Don't use the same quote again for this many days
       repeat_help: 0 means a quote can come back any time.
-      active: Other choices are members seen in the last this many days
-      active_help: The three other faces are members with a similar number of posts. If too few were seen lately, anyone with posts is used.
+      active: Members seen in the last this many days count as active
+      active_help: The three other faces look like the author, so they don't give the answer away. They had joined by the time the post was written, have a similar number of posts, and are as active as the author is (seen within this many days, or not).
       tags: Only quote posts in these tags
       groups: Never quote members of these groups
       groups_help: For bots, feed importers or anyone else who shouldn't be in the game. Members of these groups are never quoted and never shown as a choice. Members can also opt themselves out in their settings.
@@ -24,6 +24,7 @@ ernestdefoe-who-said-it:
       eligible: "{count, plural, one {# post qualifies} other {# posts qualify}} under the settings below."
       eligible_many: More than 1,000 posts qualify under the settings below.
       make: Make today's quiz now
+      members_only: Only posts that guests can read are ever quoted. On a forum that guests can't read (members only), no posts qualify, so no quiz is made.
       scheduler: Quizzes are made by Flarum's scheduler, or by the first visit to the quiz page each day. The quotes are never shown here, so admins can play too.
     permissions:
       view: View Who Said It? (boards and yesterday's answers)
@@ -73,6 +74,7 @@ ernestdefoe-who-said-it:
       speed_hint: The faster you answer, the more bonus points you keep (up to 50).
       ask: Who said it?
       deleted: "[deleted]"
+      left: A member who left the game
       right: That's right!
       wrong: "Not quite. It was {name}."
       points: "+{points} points"
@@ -128,5 +130,6 @@ ernestdefoe-who-said-it:
       wsi_closed: That quiz is over. Here's today's.
       wsi_withdrawn: That quote was just withdrawn. On to the next one!
       wsi_no_quiz: There's no quiz today.
+      wsi_making: Today's quiz is on its way. Try again in a moment.
       wsi_bad_choice: That isn't one of the choices.
       wsi_not_shown: That quote isn't open yet.

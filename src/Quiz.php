@@ -27,6 +27,7 @@ class Quiz
         private readonly Presenter $presenter,
         private readonly ConnectionInterface $db,
         private readonly Cache $cache,
+        private readonly Exclusions $exclusions,
     ) {
     }
 
@@ -37,26 +38,52 @@ class Quiz
     }
 
     /**
-     * Quotes still fit to play: the post still exists, its author too, and a
-     * guest can still read it (not hidden, moved to a private tag or deleted
-     * since the quiz was made). The rest are withdrawn.
+     * Members left out of the game among the quotes this request has looked at: blanked from the choices.
+     *
+     * @var array<int, true>
+     */
+    private array $hidden = [];
+
+    /**
+     * Quotes still fit to show: the post still exists and a guest can still
+     * read it, its author hasn't left the game since (opted out, in a
+     * never-quote group, suspended), and the quoted words are still in the
+     * post (an edit that took them out withdraws the quote). The rest are
+     * withdrawn. One query for the posts, one for who's left out.
      *
      * @param Collection<int, Question> $questions
      * @return array<int, true> question id => true
      */
     public function live(Collection $questions): array
     {
-        $postIds = $questions->filter(fn (Question $q) => $q->post_id && $q->author_id)->pluck('post_id')->all();
-        $visible = $postIds ? array_flip(Post::query()->whereVisibleTo(new Guest())->whereIn('posts.id', $postIds)->pluck('posts.id')->all()) : [];
+        $candidates = $questions->filter(fn (Question $q) => $q->post_id && $q->author_id && $q->excerpt !== '');
+        $posts = $candidates->isEmpty() ? collect() : Post::query()->whereVisibleTo(new Guest())
+            ->whereIn('posts.id', $candidates->pluck('post_id')->all())
+            ->toBase()->get(['posts.id', 'posts.content'])->keyBy('id');
+
+        $people = $questions->flatMap(fn (Question $q) => [$q->author_id, ...$q->choiceIds()])->all();
+        $this->hidden += $this->exclusions->among($people);
 
         $live = [];
-        foreach ($questions as $q) {
-            if ($q->post_id && $q->author_id && isset($visible[$q->post_id])) {
+        foreach ($candidates as $q) {
+            $post = $posts->get($q->post_id);
+            if ($post && ! isset($this->hidden[$q->author_id]) && Excerpt::stillIn($q->excerpt, (string) $post->content)) {
                 $live[$q->id] = true;
             }
         }
 
         return $live;
+    }
+
+    /**
+     * The four faces as shown: a member who has left the game since is a
+     * blank (0), whatever the quote.
+     *
+     * @return list<int>
+     */
+    public function choices(Question $q): array
+    {
+        return array_map(fn (int $id) => isset($this->hidden[$id]) ? 0 : $id, $q->choiceIds());
     }
 
     /**
@@ -109,7 +136,7 @@ class Quiz
             return ['question' => $q, 'answer' => $a];
         }
 
-        $this->finish($day, $actor, $questions, $live);
+        $this->finish($day, $actor->id, $questions, $live);
 
         return null;
     }
@@ -200,7 +227,7 @@ class Quiz
         $live = $this->live($questions);
         $answers = $this->answers($questions, $actor);
         if (! $questions->contains(fn (Question $q) => isset($live[$q->id]) && ! $answers->get($q->id)?->answered_at)) {
-            $this->finish($day, $actor, $questions, $live);
+            $this->finish($day, $actor->id, $questions, $live);
         }
 
         return [null, $answer];
@@ -214,11 +241,11 @@ class Quiz
      * @param Collection<int, Question> $questions
      * @param array<int, true> $live
      */
-    public function finish(Day $day, User $actor, Collection $questions, array $live): void
+    public function finish(Day $day, int $userId, Collection $questions, array $live): void
     {
-        $finished = $this->db->transaction(function () use ($day, $actor, $questions, $live) {
+        $finished = $this->db->transaction(function () use ($day, $userId, $questions, $live) {
             /** @var Score|null $score */
-            $score = Score::query()->where('day_id', $day->id)->where('user_id', $actor->id)->lockForUpdate()->first();
+            $score = Score::query()->where('day_id', $day->id)->where('user_id', $userId)->lockForUpdate()->first();
             if (! $score || $score->finished_at) {
                 return false;
             }
@@ -233,7 +260,7 @@ class Quiz
             $score->finished_at = Carbon::now();
             $score->save();
 
-            $player = $this->player($actor->id, true);
+            $player = $this->player($userId, true);
             $yesterday = Carbon::parse($day->day)->subDay()->toDateString();
             if ($player->last_day !== $day->day) {
                 $player->streak = $player->last_day === $yesterday ? $player->streak + 1 : 1;
@@ -252,6 +279,41 @@ class Quiz
             // Their name may be on the boards now.
             $this->cache->forget('ernestdefoe-who-said-it.today.'.$day->id);
             $this->cache->forget('ernestdefoe-who-said-it.alltime.'.$this->clock->today());
+        }
+    }
+
+    /**
+     * Days before today that a member started and didn't finish (they
+     * stopped partway, or the day ended mid-quiz): finished now, so their
+     * points count and the day keeps their streak. A day where nothing was
+     * answered is dropped instead. For one member (on their next visit) or
+     * everyone (the scheduler).
+     */
+    public function settle(?int $userId = null): void
+    {
+        $scores = Score::query()->whereNull('finished_at')
+            ->whereIn('day_id', Day::query()->select('id')->where('day', '<', $this->clock->today()))
+            ->when($userId, fn ($q) => $q->where('user_id', $userId))
+            ->limit(1000)->get();
+        if ($scores->isEmpty()) {
+            return;
+        }
+
+        foreach ($scores->groupBy('day_id') as $dayId => $rows) {
+            $day = Day::query()->find($dayId);
+            if (! $day) {
+                continue;
+            }
+            $questions = $this->questions($day);
+            $live = $this->live($questions);
+            foreach ($rows as $score) {
+                /** @var Score $score */
+                if ($score->answered === 0) {
+                    Score::query()->whereKey($score->id)->whereNull('finished_at')->delete();
+                } else {
+                    $this->finish($day, $score->user_id, $questions, $live);
+                }
+            }
         }
     }
 
@@ -286,7 +348,7 @@ class Quiz
             'id' => $q->id,
             'position' => $q->position,
             'excerpt' => $q->excerpt,
-            'choices' => $q->choiceIds(),
+            'choices' => $this->choices($q),
             'elapsedMs' => (int) max(0, Carbon::now()->getTimestampMs() - $a->shown_ms),
             'limitMs' => Scoring::NO_BONUS_MS,
         ];
@@ -303,8 +365,9 @@ class Quiz
         return [
             'id' => $q->id,
             'position' => $q->position,
-            'excerpt' => $q->excerpt,
-            'choices' => $q->choiceIds(),
+            // A withdrawn quote shows nothing of itself: not its words, not its faces.
+            'excerpt' => $live ? $q->excerpt : '',
+            'choices' => $live ? $this->choices($q) : [],
             'author' => $live ? $q->author_id : null,
             'post' => $live ? ($posts[$q->id] ?? null) : null,
             'withdrawn' => ! $live,

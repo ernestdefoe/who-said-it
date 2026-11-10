@@ -93,10 +93,6 @@ class Board
                 'questions' => $questions->map(function (Question $q) use ($live, $posts, $stats) {
                     $isLive = isset($live[$q->id]);
                     $row = $this->quiz->reveal($q, null, $posts, $isLive);
-                    if (! $isLive) {
-                        $row['excerpt'] = '';
-                        $row['choices'] = [];
-                    }
                     $n = (int) ($stats->get($q->id)->n ?? 0);
                     $row['answered'] = $n;
                     $row['percent'] = $n ? (int) round(100 * (int) $stats->get($q->id)->hits / $n) : null;
@@ -125,6 +121,8 @@ class Board
             'me' => null,
             'played' => [],
             'current' => null,
+            // Being made by another request this very moment: the page asks again shortly.
+            'pending' => ! $day && $this->quiz->generator()->busy,
         ];
 
         if ($day) {
@@ -134,6 +132,7 @@ class Board
         }
 
         if ($canPlay) {
+            $this->quiz->settle($actor->id);
             $out['me'] = $this->me($actor, $day);
             if ($day) {
                 [$played, $current, $ids] = $this->mine($day, $actor);
@@ -180,14 +179,20 @@ class Board
             $a = $answers->get($q->id);
             if ($a?->answered_at) {
                 $played[] = $this->quiz->reveal($q, $a, $posts, isset($live[$q->id]));
-                $ids = array_merge($ids, $q->choiceIds());
+                $ids = array_merge($ids, $this->quiz->choices($q));
             } elseif ($a && isset($live[$q->id])) {
                 $current = $this->quiz->served($q, $a);
-                $ids = array_merge($ids, $q->choiceIds());
+                $ids = array_merge($ids, $this->quiz->choices($q));
             }
         }
 
         return [$played, $current, $ids];
+    }
+
+    /** Someone left the game (opted out, a group setting, an erase): yesterday's answers are drawn again. */
+    public function forgetYesterday(): void
+    {
+        $this->cache->forget('ernestdefoe-who-said-it.yesterday.'.$this->clock->yesterday());
     }
 
     /** @return array<string, mixed> */

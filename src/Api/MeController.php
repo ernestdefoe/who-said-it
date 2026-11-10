@@ -2,6 +2,7 @@
 
 namespace ErnestDefoe\WhoSaidIt\Api;
 
+use ErnestDefoe\WhoSaidIt\Board;
 use ErnestDefoe\WhoSaidIt\Quiz;
 use Flarum\Http\RequestUtil;
 use Illuminate\Support\Arr;
@@ -17,7 +18,7 @@ use Psr\Http\Server\RequestHandlerInterface;
  */
 class MeController implements RequestHandlerInterface
 {
-    public function __construct(private readonly Quiz $quiz)
+    public function __construct(private readonly Quiz $quiz, private readonly Board $board)
     {
     }
 
@@ -35,6 +36,10 @@ class MeController implements RequestHandlerInterface
             $player->opted_out = (bool) Arr::get($body, 'optedOut');
         }
         $player->save();
+        if (Arr::has($body, 'optedOut')) {
+            // Out (or back in) of today's quiz at once; yesterday's answers are drawn again too.
+            $this->board->forgetYesterday();
+        }
 
         return new JsonResponse(['remind' => $player->remind, 'optedOut' => $player->opted_out]);
     }

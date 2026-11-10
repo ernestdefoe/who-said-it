@@ -50,6 +50,8 @@ export interface PageData {
   allTime: { user: number; total: number; quizzes: number; correct: number; best: number; streak: number }[];
   yesterday: { date: string; questions: Reveal[] } | null;
   users: UserRow[];
+  /** Today's quiz is being made by another request right now. */
+  pending?: boolean;
 }
 
 export function call<T>(method: 'GET' | 'POST', path: string, body?: Record<string, any>): Promise<T> {
@@ -59,7 +61,7 @@ export function call<T>(method: 'GET' | 'POST', path: string, body?: Record<stri
     body,
     errorHandler: (error: any) => {
       const code = error?.response?.errors?.[0]?.code;
-      const known = ['wsi_closed', 'wsi_withdrawn', 'wsi_no_quiz', 'wsi_bad_choice', 'wsi_not_shown'];
+      const known = ['wsi_closed', 'wsi_withdrawn', 'wsi_no_quiz', 'wsi_making', 'wsi_bad_choice', 'wsi_not_shown'];
       app.alerts.show({ type: 'error' }, known.includes(code) ? t(`forum.errors.${code}`) : t('forum.errors.generic'));
       throw error;
     },

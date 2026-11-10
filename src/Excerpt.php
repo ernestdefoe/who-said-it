@@ -109,6 +109,39 @@ final class Excerpt
     }
 
     /**
+     * Whether a quote's words are all still in the post as stored now, in
+     * order. Words, not characters: markup, punctuation, case and whatever
+     * the excerpt left out (a mention, a link's address) don't matter, but
+     * an edit that took the quoted words out does.
+     */
+    public static function stillIn(string $excerpt, string $stored): bool
+    {
+        // Markup markers (**, _, the "](url)" of a link) live in <s>/<e> elements: not the author's words.
+        $stored = preg_replace('~<([se])>.*?</\1>~su', ' ', $stored) ?? $stored;
+        $source = self::words(html_entity_decode(strip_tags(str_replace('<', ' <', $stored)), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $at = 0;
+        $count = count($source);
+        foreach (self::words(str_replace('[…]', ' ', $excerpt)) as $word) {
+            while ($at < $count && $source[$at] !== $word) {
+                $at++;
+            }
+            if ($at++ >= $count) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @return list<string> */
+    private static function words(string $text): array
+    {
+        preg_match_all('/[\p{L}\p{N}]+/u', mb_strtolower($text), $m);
+
+        return $m[0];
+    }
+
+    /**
      * Whether the cleaned words still read as a sentence: taking something
      * out mid-sentence leaves "the , and" or "( )", which makes a poor quote.
      */

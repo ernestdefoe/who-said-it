@@ -13,7 +13,12 @@
 - 🚨 `comment_count` is UNSIGNED on MySQL: never `count - n` in SQL (out-of-range error); the distractor order uses a CASE.
 - **The forum payload costs one query for a member** (`ForumState`: users ⟕ players ⟕ today's score) and none for guests (the day is cached). It never generates.
 - **Reminders are opt-in** (`players.remind`), sent once per day (`Day.reminded_at` claimed by one guarded UPDATE, then a queued job). The notification subject is the member (Users have an API resource; a subject without one hides or breaks notification lists).
-- **Opt-out** (`players.opted_out`) keeps a member out of quotes AND choices from the next quiz on. Deleting a member (`Deleting`) or a GDPR erase blanks their quoted words.
+- **Who's left out of the game is decided by `Exclusions`** (opted out, never-quote groups, suspended now): applied when a quiz is made (subquery, never an id list) AND every time one is shown (`Quiz::live()` withdraws their quotes; `Quiz::choices()` blanks their faces to 0). Opt-out and group changes forget yesterday's cached answers. Never read `choiceIds()` for output: use `choices()`.
+- **A quote is withdrawn when** its post isn't guest-readable, its author is left out, or its words are no longer in the post as stored (`Excerpt::stillIn`, words in order). A withdrawn quote is sent with no words and no faces.
+- **Distractors look like the author**: joined by the post's date, closest post count, and the same side of the activity line (`active_days`) as the author; no "confirmed only" filter (a tell).
+- **Unfinished past days are finished** (`Quiz::settle`: scheduler for everyone, the member's next visit for them), so points and streaks aren't lost; a day with nothing answered is dropped.
+- **Deleting a member goes through `Forget`**, a plain class: the GDPR data type extends flarum/gdpr's class and must never load when gdpr isn't installed.
+- While another request holds the build lock, the page says "on its way" (`pending`) and /next answers 503 `wsi_making`.
 - Never name a translation parameter `user` (Flarum's translator treats it as a User model).
 - Themes recolour links: every text colour inside our `<a>` elements is set under `html:not(#x-wsi)`.
 - Mithril: siblings are all keyed or none; the quote is keyed alone inside `.WsiQuote-wrap` so its entrance replays.

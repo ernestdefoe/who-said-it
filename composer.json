@@ -54,6 +54,7 @@
             },
             "optional-dependencies": [
                 "flarum/gdpr",
+                "flarum/suspend",
                 "flarum/tags"
             ]
         }
@@ -61,6 +62,7 @@
     "require-dev": {
         "flarum/gdpr": "^2.0",
         "flarum/phpstan": "^2.0",
+        "flarum/suspend": "^2.0",
         "flarum/tags": "^2.0",
         "flarum/testing": "^2.0"
     },

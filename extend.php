@@ -14,6 +14,8 @@
  */
 
 use ErnestDefoe\WhoSaidIt\Api;
+use ErnestDefoe\WhoSaidIt\Board;
+use ErnestDefoe\WhoSaidIt\Forget;
 use ErnestDefoe\WhoSaidIt\Console\MakeCommand;
 use ErnestDefoe\WhoSaidIt\ForumState;
 use ErnestDefoe\WhoSaidIt\Gdpr\WhoSaidItData;
@@ -25,6 +27,7 @@ use Flarum\Api\Resource\ForumResource;
 use Flarum\Api\Schema;
 use Flarum\Extend;
 use Flarum\Gdpr\Extend\UserData;
+use Flarum\Settings\Event\Saved;
 use Flarum\User\Event\Deleting;
 use Illuminate\Console\Scheduling\Event as ScheduledEvent;
 
@@ -79,8 +82,15 @@ return [
         ->serializeToForum('whoSaidItNav', Settings::NAV, 'boolval'),
 
     // Before the user row goes: their answers go with it (foreign keys), but their quoted words must too.
+    // 🚨 Forget, not the GDPR data type: that class extends flarum/gdpr's, which may not be installed.
     (new Extend\Event())
-        ->listen(Deleting::class, fn (Deleting $event) => WhoSaidItData::forget($event->user->id)),
+        ->listen(Deleting::class, fn (Deleting $event) => resolve(Forget::class)($event->user->id))
+        // A change to who's left out redraws yesterday's answers (today's are checked on every view).
+        ->listen(Saved::class, function (Saved $event) {
+            if (array_key_exists(Settings::GROUPS, $event->settings)) {
+                resolve(Board::class)->forgetYesterday();
+            }
+        }),
 
     (new Extend\Conditional())
         ->whenExtensionEnabled('flarum-gdpr', fn () => [

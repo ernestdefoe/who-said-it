@@ -62,6 +62,7 @@ export default class StatusPanel extends Component {
               </Button>
             ) : null}
             <p className="helpText">{t('scheduler')}</p>
+            <p className="helpText">{t('members_only')}</p>
           </div>
         )}
       </div>
