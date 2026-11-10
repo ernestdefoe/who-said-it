@@ -143,6 +143,22 @@ class QuizTest extends TestCase
     }
 
     #[Test]
+    public function only_one_request_makes_a_day_at_a_time()
+    {
+        $this->app();
+        $date = Carbon::now()->toDateString();
+        $lock = $this->app()->getContainer()->make('cache.store')->getStore()->lock('ernestdefoe-who-said-it.make.'.$date, 120);
+        $this->assertTrue($lock->get());
+
+        $generator = $this->app()->getContainer()->make(Generator::class);
+        $this->assertNull($generator->forDate($date), 'another request is making it');
+        $this->assertSame(0, Day::query()->count());
+
+        $lock->release();
+        $this->assertNotNull($generator->forDate($date));
+    }
+
+    #[Test]
     public function no_quote_is_reused_within_the_repeat_window()
     {
         $day = $this->make();

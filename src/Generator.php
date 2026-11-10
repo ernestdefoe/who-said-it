@@ -8,6 +8,8 @@ use Flarum\Post\CommentPost;
 use Flarum\Post\Post;
 use Flarum\User\Guest;
 use Flarum\User\User;
+use Illuminate\Cache\Repository;
+use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -51,6 +53,29 @@ class Generator
     {
         $day = Day::query()->where('day', $date)->first();
         if ($day || (! $force && $this->cache->get($this->noneKey($date)))) {
+            return $day;
+        }
+
+        // One maker at a time: at midnight, before the scheduler's run, the first few visitors
+        // would otherwise each search the posts table for the same day. The others see no quiz
+        // for the second it takes, then the one that was made.
+        $store = $this->cache instanceof Repository ? $this->cache->getStore() : null;
+        $lock = $store instanceof LockProvider ? $store->lock('ernestdefoe-who-said-it.make.'.$date, 120) : null;
+        if ($lock && ! $lock->get()) {
+            return null;
+        }
+
+        try {
+            return $this->make($date);
+        } finally {
+            $lock?->release();
+        }
+    }
+
+    private function make(string $date): ?Day
+    {
+        $day = Day::query()->where('day', $date)->first();
+        if ($day) {
             return $day;
         }
 
