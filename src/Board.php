@@ -84,7 +84,7 @@ class Board
             $questions = $this->quiz->questions($day);
             $live = $this->quiz->live($questions);
             $posts = $this->quiz->presenter()->posts($questions->filter(fn (Question $q) => isset($live[$q->id]))->values()->all());
-            $stats = Answer::query()->whereIn('question_id', $questions->pluck('id'))->whereNotNull('answered_at')
+            $stats = Answer::query()->toBase()->whereIn('question_id', $questions->pluck('id'))->whereNotNull('answered_at')
                 ->groupBy('question_id')->selectRaw('question_id, COUNT(*) as n, SUM(CASE WHEN correct THEN 1 ELSE 0 END) as hits')
                 ->get()->keyBy('question_id');
 
@@ -170,7 +170,7 @@ class Board
         }
 
         $live = $this->quiz->live($questions);
-        $answered = $questions->filter(fn (Question $q) => $answers->get($q->id)?->answered_at)->values();
+        $answered = $questions->filter(fn (Question $q) => $answers->get($q->id)?->answered_at !== null)->values();
         $posts = $this->quiz->presenter()->posts($answered->filter(fn (Question $q) => isset($live[$q->id]))->all());
 
         $played = [];
@@ -198,16 +198,16 @@ class Board
         $today = $this->clock->today();
 
         return [
-            'score' => $score?->score ?? 0,
-            'correct' => $score?->correct ?? 0,
-            'answered' => $score?->answered ?? 0,
-            'grid' => $score?->grid ?? '',
+            'score' => $score->score ?? 0,
+            'correct' => $score->correct ?? 0,
+            'answered' => $score->answered ?? 0,
+            'grid' => $score->grid ?? '',
             'finished' => (bool) $score?->finished_at,
             'rank' => $score?->finished_at ? $this->rank($score) : null,
             'streak' => $player ? $player->currentStreak($today, $this->clock->yesterday()) : 0,
-            'best' => $player?->best_streak ?? 0,
-            'total' => $player?->total_score ?? 0,
-            'quizzes' => $player?->quizzes ?? 0,
+            'best' => $player->best_streak ?? 0,
+            'total' => $player->total_score ?? 0,
+            'quizzes' => $player->quizzes ?? 0,
             'remind' => (bool) $player?->remind,
             'optedOut' => (bool) $player?->opted_out,
         ];

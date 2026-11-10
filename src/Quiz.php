@@ -310,7 +310,7 @@ class Quiz
             'withdrawn' => ! $live,
             'chosen' => $a?->choice_id,
             'correct' => $a?->correct,
-            'points' => $a?->points ?? 0,
+            'points' => $a->points ?? 0,
             'bonus' => $a && $a->correct ? $a->points - Scoring::BASE : 0,
             'ms' => $a?->ms,
         ];

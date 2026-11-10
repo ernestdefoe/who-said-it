@@ -2,6 +2,7 @@
 
 namespace ErnestDefoe\WhoSaidIt\Job;
 
+use Carbon\Carbon;
 use ErnestDefoe\WhoSaidIt\Day;
 use ErnestDefoe\WhoSaidIt\Notification\ReminderBlueprint;
 use ErnestDefoe\WhoSaidIt\Player;
@@ -37,7 +38,8 @@ class SendReminders extends AbstractJob
             ->chunkById(200, function ($users) use ($notifications, $day) {
                 foreach ($users as $user) {
                     /** @var User $user */
-                    if ($user->suspended_until?->isFuture() || ! $user->can(Settings::PLAY)) {
+                    $suspended = $user->getAttribute('suspended_until');
+                    if (($suspended && Carbon::parse($suspended)->isFuture()) || ! $user->can(Settings::PLAY)) {
                         continue;
                     }
                     $notifications->sync(new ReminderBlueprint($user, $day->day, $day->question_count), [$user]);

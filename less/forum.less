@@ -1,0 +1,1069 @@
+// Who Said It? Every text colour comes from Flarum's CSS properties so themes
+// and dark mode carry through. The only literals are the result colours
+// (green / amber / red squares), which always set their own text colour.
+// 🚨 Themes recolour links (Bespoke light: `:root:not([data-theme^="dark"]) a:not(.Button)`,
+// 0,3,1): every rule that colours text inside one of our links starts with
+// `html:not(#x-wsi)` (1,1,1) so it wins.
+
+@wsi-right: #16a34a;
+@wsi-fast: #16a34a;
+@wsi-slow: #d97706;
+@wsi-wrong: #dc2626;
+@wsi-void: #94a3b8;
+@wsi-ink: #fff;
+
+// ── shared ─────────────────────────────────────────────────────
+
+.WsiPips {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.WsiPip {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--control-bg);
+  box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.25);
+
+  &--G {
+    background: @wsi-fast;
+    box-shadow: none;
+  }
+  &--Y {
+    background: @wsi-slow;
+    box-shadow: none;
+  }
+  &--R {
+    background: @wsi-wrong;
+    box-shadow: none;
+  }
+  &--V {
+    background: @wsi-void;
+    box-shadow: none;
+    opacity: 0.6;
+  }
+}
+.WsiPips--big {
+  gap: 6px;
+
+  .WsiPip {
+    width: 28px;
+    height: 8px;
+    border-radius: 999px;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .WsiPip.is-current {
+    box-shadow: 0 0 0 2px var(--primary-color);
+    background: var(--primary-color);
+    opacity: 0.55;
+    animation: wsi-pulse 1.6s ease-in-out infinite;
+  }
+}
+@keyframes wsi-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.WsiSection-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: bold;
+  color: var(--text-color);
+
+  .icon {
+    color: var(--primary-color);
+  }
+}
+.WsiSection-date {
+  margin-left: auto;
+  font-weight: normal;
+  font-size: 13px;
+  color: var(--muted-color);
+}
+
+.WsiEmpty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--muted-color);
+}
+
+// ── sidebar card ───────────────────────────────────────────────
+
+.IndexPage-nav .item-who-said-it .WsiCard,
+.WsiCard {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  margin: 16px 0 0;
+  padding: 12px 14px 13px;
+  border-radius: var(--border-radius, 8px);
+  background: var(--control-bg);
+  text-decoration: none;
+  white-space: normal;
+  transition: transform 0.15s, box-shadow 0.15s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: var(--primary-color);
+  }
+  &:hover {
+    text-decoration: none;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  }
+}
+.WsiCard--flat {
+  margin: 0;
+}
+html:not(#x-wsi) .WsiCard {
+  color: var(--text-color);
+
+  .WsiCard-title {
+    color: var(--text-color);
+  }
+  .WsiCard-lead {
+    color: var(--muted-color);
+  }
+  .WsiCard-action {
+    color: var(--primary-color);
+  }
+  .WsiCard-streak {
+    color: #c2410c;
+  }
+  .WsiCard-mark {
+    color: var(--primary-color);
+  }
+}
+.WsiCard-mark {
+  position: absolute;
+  right: 8px;
+  top: -6px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 84px;
+  line-height: 1;
+  opacity: 0.12;
+  pointer-events: none;
+}
+.WsiCard-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+.WsiCard-title {
+  font-weight: bold;
+  font-size: 14px;
+}
+.WsiCard-streak {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.14);
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+.WsiCard-lead {
+  display: block;
+  margin: 3px 0 9px;
+  font-size: 12px;
+  line-height: 1.4;
+  position: relative;
+}
+.WsiCard .WsiPips {
+  display: flex;
+  margin-bottom: 9px;
+
+  .WsiPip {
+    flex: 1;
+    height: 6px;
+    width: auto;
+    border-radius: 999px;
+  }
+}
+.WsiCard-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: bold;
+
+  .icon {
+    font-size: 11px;
+    transition: transform 0.15s;
+  }
+}
+.WsiCard:hover .WsiCard-action .icon {
+  transform: translateX(3px);
+}
+
+// Phones: the sidebar becomes a dropdown; the card sits above the list.
+@media (max-width: 767px) {
+  .IndexPage-nav .item-who-said-it .WsiCard,
+  .WsiCard:not(.WsiCard--flat) {
+    margin: 12px 0;
+  }
+  // Done for today: don't keep it above every list on a small screen.
+  .WsiCard.is-finished:not(.WsiCard--flat) {
+    display: none;
+  }
+}
+
+// ── the page ───────────────────────────────────────────────────
+
+.WsiPage-body {
+  max-width: 760px;
+  min-width: 0;
+}
+
+.WsiHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 0 0 18px;
+}
+.WsiHead-mark {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 16px;
+  background: var(--primary-color);
+  color: var(--body-bg);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 64px;
+  line-height: 78px;
+  text-align: center;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+.WsiHead-text {
+  flex: 1;
+  min-width: 0;
+}
+.WsiPage h1.WsiHead-title {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+  color: var(--text-color);
+}
+.WsiHead-lead {
+  margin: 4px 0 0;
+  color: var(--muted-color);
+}
+.WsiHead-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--control-bg);
+    color: var(--control-color);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .WsiHead-streak.is-lit {
+    background: rgba(249, 115, 22, 0.14);
+    color: #c2410c;
+  }
+}
+[data-theme^='dark'] .WsiHead-stats .WsiHead-streak.is-lit,
+[data-theme^='dark'] html:not(#x-wsi) .WsiCard .WsiCard-streak {
+  color: #fdba74;
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme='auto'] .WsiHead-stats .WsiHead-streak.is-lit {
+    color: #fdba74;
+  }
+}
+
+// The stage: one card that is the intro, the question, the reveal or the result.
+.WsiStage {
+  position: relative;
+  padding: 24px;
+  border-radius: calc(var(--border-radius, 8px) * 2);
+  background: var(--body-bg);
+  border: 1px solid var(--control-bg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  margin-bottom: 28px;
+  min-width: 0;
+}
+
+.WsiNote {
+  text-align: center;
+  padding: 18px 0;
+
+  > .icon {
+    font-size: 30px;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+  }
+  h2 {
+    margin: 0 0 6px;
+    font-size: 19px;
+    color: var(--text-color);
+  }
+  p {
+    color: var(--muted-color);
+    margin: 0 auto 16px;
+    max-width: 440px;
+  }
+}
+
+.Button.WsiBig {
+  padding: 10px 22px;
+  font-size: 15px;
+  font-weight: bold;
+  border-radius: 999px;
+}
+
+.WsiIntro {
+  text-align: center;
+
+  .WsiPips {
+    margin-bottom: 18px;
+  }
+}
+.WsiPage h2.WsiIntro-title {
+  margin: 0 0 18px;
+  font-size: 21px;
+  color: var(--text-color);
+}
+.WsiRules {
+  display: grid;
+  gap: 10px;
+  max-width: 470px;
+  margin: 0 auto 22px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    color: var(--text-color);
+    line-height: 1.45;
+  }
+}
+.WsiRules-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--control-bg);
+  color: var(--primary-color);
+  font-size: 13px;
+}
+
+.WsiRemind {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+  color: var(--muted-color);
+
+  .Checkbox {
+    margin: 0;
+    color: var(--muted-color);
+  }
+}
+
+// The question
+.WsiPlay-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.WsiPlay-count {
+  color: var(--muted-color);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.WsiTimer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  color: var(--primary-color);
+  font-size: 12px;
+}
+.WsiTimer-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--control-bg);
+  overflow: hidden;
+}
+.WsiTimer-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary-color);
+  transform-origin: left center;
+  animation-name: wsi-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+// Full bonus for the first 3 of 20 seconds, then down to nothing.
+@keyframes wsi-drain {
+  0%,
+  15% {
+    transform: scaleX(1);
+  }
+  100% {
+    transform: scaleX(0);
+  }
+}
+.WsiTimer-label {
+  color: var(--muted-color);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.WsiQuote {
+  position: relative;
+  margin: 0 0 18px;
+  padding: 22px 24px 22px 56px;
+  border: 0;
+  border-radius: calc(var(--border-radius, 8px) * 1.5);
+  background: var(--control-bg);
+  animation: wsi-in 0.35s ease-out;
+
+  &::before {
+    content: '“';
+    position: absolute;
+    left: 14px;
+    top: 4px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 64px;
+    line-height: 1;
+    color: var(--primary-color);
+    opacity: 0.7;
+  }
+  p {
+    margin: 0;
+    font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    font-size: 19px;
+    line-height: 1.55;
+    color: var(--text-color);
+    overflow-wrap: anywhere;
+  }
+}
+@keyframes wsi-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.WsiPlay-ask {
+  margin: 0 0 10px;
+  font-weight: bold;
+  color: var(--text-color);
+  &:empty {
+    display: none;
+  }
+}
+
+.WsiChoices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.WsiChoice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 2px solid var(--control-bg);
+  border-radius: calc(var(--border-radius, 8px) * 1.5);
+  background: var(--body-bg);
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s, background 0.15s, opacity 0.2s;
+
+  &:hover:not([disabled]) {
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+  }
+  &:active:not([disabled]) {
+    transform: scale(0.98);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+  &[disabled] {
+    cursor: default;
+  }
+  &.is-picked {
+    border-color: var(--primary-color);
+  }
+  &.is-right {
+    border-color: @wsi-right;
+    background: fade(@wsi-right, 12%);
+  }
+  &.is-wrong {
+    border-color: @wsi-wrong;
+    background: fade(@wsi-wrong, 10%);
+  }
+  &.is-dim {
+    opacity: 0.45;
+  }
+}
+.WsiChoice-key {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--muted-color);
+  opacity: 0.7;
+}
+.WsiChoice .Avatar.WsiChoice-avatar {
+  --size: 44px;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  font-size: 20px;
+  line-height: 44px;
+}
+.WsiChoice-names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.WsiChoice-name {
+  font-weight: bold;
+  font-size: 15px;
+  color: var(--text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.WsiChoice-user {
+  font-size: 12px;
+  color: var(--muted-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.WsiChoice-mark {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  line-height: 24px;
+  text-align: center;
+  font-size: 12px;
+  color: @wsi-ink;
+  background: @wsi-right;
+}
+.WsiChoice.is-wrong .WsiChoice-mark {
+  background: @wsi-wrong;
+}
+
+.WsiVerdict {
+  margin-top: 18px;
+  text-align: center;
+  animation: wsi-in 0.3s ease-out;
+}
+.WsiVerdict-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  margin-bottom: 10px;
+}
+.WsiVerdict-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: @wsi-ink;
+  background: @wsi-right;
+  font-size: 17px;
+  animation: wsi-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.WsiVerdict.is-wrong .WsiVerdict-badge {
+  background: @wsi-wrong;
+}
+@keyframes wsi-pop {
+  from {
+    transform: scale(0.4);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.WsiVerdict-text {
+  display: flex;
+  flex-direction: column;
+  color: var(--text-color);
+
+  strong {
+    font-size: 17px;
+    color: var(--text-color);
+  }
+}
+.WsiVerdict-points {
+  color: var(--muted-color);
+  font-size: 13px;
+  font-weight: 600;
+}
+.WsiVerdict-bonus {
+  color: var(--primary-color);
+}
+html:not(#x-wsi) .WsiVerdict-source {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 0 auto 16px;
+  max-width: 100%;
+  color: var(--primary-color);
+  font-size: 13px;
+  font-weight: 600;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+}
+
+// The result
+.WsiDone {
+  text-align: center;
+}
+.WsiDone-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: wsi-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.WsiDone-points {
+  font-size: 54px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--primary-color);
+  font-variant-numeric: tabular-nums;
+}
+.WsiDone-label {
+  margin-top: 4px;
+  color: var(--muted-color);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+.WsiDone-summary {
+  margin: 10px 0 14px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+.WsiDone-grid {
+  display: inline-flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.WsiSquare {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: var(--control-bg);
+  animation: wsi-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+
+  &--G {
+    background: @wsi-fast;
+  }
+  &--Y {
+    background: @wsi-slow;
+  }
+  &--R {
+    background: @wsi-wrong;
+  }
+  &--V {
+    background: @wsi-void;
+  }
+  &:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  &:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+  &:nth-child(4) {
+    animation-delay: 0.18s;
+  }
+  &:nth-child(5) {
+    animation-delay: 0.24s;
+  }
+}
+.WsiDone-streak {
+  margin: 0 0 16px;
+  color: #c2410c;
+  font-weight: 600;
+}
+[data-theme^='dark'] .WsiDone-streak {
+  color: #fdba74;
+}
+.WsiDone-next {
+  margin: 14px 0 0;
+  color: var(--muted-color);
+  font-size: 13px;
+}
+
+.WsiRecap {
+  display: grid;
+  gap: 10px;
+  text-align: left;
+
+  .WsiDone & {
+    margin-top: 26px;
+    padding-top: 20px;
+    border-top: 1px solid var(--control-bg);
+  }
+}
+.WsiRecapRow {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: calc(var(--border-radius, 8px) * 1.5);
+  background: var(--control-bg);
+  min-width: 0;
+  border-left: 4px solid transparent;
+
+  &.is-right {
+    border-left-color: @wsi-right;
+  }
+  &.is-wrong {
+    border-left-color: @wsi-wrong;
+  }
+  &.is-withdrawn {
+    opacity: 0.6;
+  }
+}
+.WsiRecapRow-n {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--body-bg);
+  color: var(--muted-color);
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 22px;
+  text-align: center;
+}
+.WsiRecapRow-body {
+  flex: 1;
+  min-width: 0;
+}
+.WsiRecapRow-quote {
+  margin: 0 0 8px;
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-color);
+  overflow-wrap: anywhere;
+
+  .is-withdrawn & {
+    margin: 0;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--muted-color);
+  }
+}
+.WsiRecapRow-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--muted-color);
+}
+.WsiRecapRow-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: bold;
+  color: var(--text-color);
+
+  .Avatar {
+    --size: 20px;
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+    line-height: 20px;
+  }
+}
+.WsiRecapRow-result {
+  font-weight: 600;
+  color: var(--muted-color);
+}
+html:not(#x-wsi) .WsiRecapRow-link {
+  margin-left: auto;
+  color: var(--primary-color);
+  font-weight: 600;
+
+  .icon {
+    font-size: 10px;
+  }
+}
+
+// Below the stage: the boards and yesterday's answers.
+.WsiBelow {
+  display: grid;
+  gap: 28px;
+}
+.WsiBoard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+
+  .WsiSection-title {
+    margin: 0;
+  }
+}
+.WsiTabs {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--control-bg);
+}
+.WsiTab {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--control-color);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &.is-active {
+    background: var(--body-bg);
+    color: var(--text-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+}
+.WsiBoard-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.WsiBoard-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--border-radius, 8px);
+  min-width: 0;
+
+  & + & {
+    border-top: 1px solid var(--control-bg);
+  }
+  &.is-me {
+    background: var(--control-bg);
+  }
+  .Avatar {
+    --size: 28px;
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+    line-height: 28px;
+    flex-shrink: 0;
+  }
+}
+.WsiBoard-rank {
+  width: 24px;
+  flex-shrink: 0;
+  text-align: center;
+  font-weight: bold;
+  font-size: 13px;
+  color: var(--muted-color);
+
+  &.is-medal {
+    height: 24px;
+    line-height: 24px;
+    border-radius: 50%;
+    color: #422006;
+  }
+  &.is-1 {
+    background: #fbbf24;
+  }
+  &.is-2 {
+    background: #cbd5e1;
+    color: #1e293b;
+  }
+  &.is-3 {
+    background: #f0a868;
+  }
+}
+.WsiBoard-who {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+html:not(#x-wsi) .WsiBoard-name {
+  color: var(--text-color);
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.WsiBoard-sub {
+  font-size: 12px;
+  color: var(--muted-color);
+}
+.WsiBoard-score {
+  min-width: 44px;
+  text-align: right;
+  font-weight: 800;
+  color: var(--text-color);
+  font-variant-numeric: tabular-nums;
+}
+.WsiBoard-empty {
+  margin: 0;
+  padding: 14px;
+  border-radius: var(--border-radius, 8px);
+  background: var(--control-bg);
+  color: var(--muted-color);
+  font-size: 13px;
+  text-align: center;
+}
+
+// ── phones ─────────────────────────────────────────────────────
+
+@media (max-width: 767px) {
+  .WsiPage-body {
+    padding-top: 12px;
+  }
+  .WsiHead-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 50px;
+    line-height: 62px;
+  }
+  .WsiPage h1.WsiHead-title {
+    font-size: 21px;
+  }
+  .WsiHead-lead {
+    font-size: 13px;
+  }
+  .WsiStage {
+    padding: 18px 14px;
+    margin-left: -4px;
+    margin-right: -4px;
+  }
+  .WsiPips--big .WsiPip {
+    width: 20px;
+  }
+  .WsiQuote {
+    padding: 18px 16px 18px 42px;
+
+    &::before {
+      left: 8px;
+      font-size: 52px;
+    }
+    p {
+      font-size: 17px;
+    }
+  }
+  .WsiChoices {
+    gap: 8px;
+  }
+  .WsiChoice {
+    flex-direction: column;
+    text-align: center;
+    gap: 6px;
+    padding: 12px 8px 10px;
+  }
+  .WsiChoice-names {
+    align-items: center;
+    max-width: 100%;
+  }
+  .WsiChoice-name {
+    font-size: 14px;
+    max-width: 100%;
+  }
+  .WsiChoice-mark {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    margin: 0;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+  }
+  .WsiChoice-key {
+    display: none;
+  }
+  .WsiDone-points {
+    font-size: 46px;
+  }
+  .WsiSquare {
+    width: 34px;
+    height: 34px;
+  }
+  .WsiRecapRow-link {
+    margin-left: 0;
+  }
+  .WsiBoard-row .WsiPips {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .WsiQuote,
+  .WsiVerdict,
+  .WsiVerdict-badge,
+  .WsiDone-score,
+  .WsiSquare,
+  .WsiPips--big .WsiPip.is-current {
+    animation: none;
+  }
+}

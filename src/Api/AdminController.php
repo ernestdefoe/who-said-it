@@ -8,6 +8,7 @@ use ErnestDefoe\WhoSaidIt\Day;
 use ErnestDefoe\WhoSaidIt\Generator;
 use ErnestDefoe\WhoSaidIt\Reminders;
 use Flarum\Http\RequestUtil;
+use Illuminate\Database\ConnectionInterface;
 use Laminas\Diactoros\Response\JsonResponse;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -26,6 +27,7 @@ class AdminController implements RequestHandlerInterface
         private readonly Clock $clock,
         private readonly Board $board,
         private readonly Reminders $reminders,
+        private readonly ConnectionInterface $db,
     ) {
     }
 
@@ -43,7 +45,8 @@ class AdminController implements RequestHandlerInterface
         }
 
         $day = Day::query()->where('day', $date)->first();
-        $eligible = $this->generator->eligible()->select('posts.id')->limit(1000)->get()->count();
+        // Counted up to 1,000: enough to say whether the settings leave room for quizzes.
+        $eligible = $this->db->query()->fromSub($this->generator->eligible()->select('posts.id')->limit(1000)->toBase(), 'wsi_eligible')->count();
 
         return new JsonResponse([
             'date' => $date,

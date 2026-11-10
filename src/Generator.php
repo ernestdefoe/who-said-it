@@ -218,12 +218,15 @@ class Generator
      */
     private function distractors(User $author, array $optedOut, Randomizer $random): array
     {
+        $count = $this->db->getQueryGrammar()->wrap('comment_count');
         $base = fn () => User::query()
             ->where('id', '!=', $author->id)
             ->whereNotIn('id', $optedOut)
             ->where('is_email_confirmed', true)
             ->where('comment_count', '>', 0)
-            ->orderByRaw('ABS('.$this->db->getQueryGrammar()->wrap('comment_count').' - ?)', [(int) $author->comment_count])
+            // Distance in post count. 🚨 comment_count is UNSIGNED on MySQL: `count - n` below zero is an
+            // out-of-range error, not a negative number, so subtract the smaller from the larger.
+            ->orderByRaw("CASE WHEN $count >= ? THEN $count - ? ELSE ? - $count END", array_fill(0, 3, (int) $author->comment_count))
             ->limit(12);
 
         $active = $base()->where('last_seen_at', '>=', Carbon::now()->subDays($this->settings->int(Settings::ACTIVE_DAYS, 1, 3650)))->pluck('id')->all();

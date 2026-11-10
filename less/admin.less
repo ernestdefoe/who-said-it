@@ -1,0 +1,45 @@
+.WsiAdminStatus-box {
+  padding: 12px 14px;
+  border-radius: var(--border-radius, 8px);
+  background: var(--control-bg);
+
+  p {
+    margin: 0 0 8px;
+    color: var(--text-color);
+  }
+  .icon {
+    color: var(--primary-color);
+  }
+  .Button {
+    margin-bottom: 8px;
+  }
+}
+.WsiTagPicker-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.WsiTagPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--control-bg);
+  border-radius: 999px;
+  background: var(--body-bg);
+  color: var(--text-color);
+  font-size: 13px;
+  cursor: pointer;
+
+  &.is-on {
+    border-color: var(--tag);
+    background: var(--control-bg);
+    font-weight: bold;
+  }
+}
+.WsiTagPill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tag);
+}

@@ -75,7 +75,7 @@ class QuizTest extends TestCase
      */
     protected function allowedRepeatedQueries(): array
     {
-        return ['posts"."id" asc limit ?'];
+        return ['posts"."id" asc limit ?', 'posts`.`id` asc limit ?'];
     }
 
     /** @return array{int, array<string, mixed>|null, string} */
