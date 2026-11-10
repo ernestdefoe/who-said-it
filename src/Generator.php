@@ -186,7 +186,9 @@ class Generator
             return;
         }
 
-        for ($round = 0; $round < 8; $round++) {
+        // A forum where a few members write most posts needs more walks to find five authors;
+        // the caller stops pulling as soon as it has them.
+        for ($round = 0; $round < 20; $round++) {
             $from = $random->getInt(1, $max);
             yield from $this->eligible()->with('user')->where('posts.id', '>=', $from)->orderBy('posts.id')->limit(10)->get();
         }

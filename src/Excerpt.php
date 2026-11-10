@@ -63,6 +63,9 @@ final class Excerpt
             $text = preg_replace('/(?<![\p{L}\p{N}_])@?'.preg_quote($name, '/').'(?![\p{L}\p{N}_])/iu', '[…]', $text) ?? $text;
         }
 
+        // A mention taken from the front leaves "you asked…": start like a sentence.
+        $text = mb_strtoupper(mb_substr($text, 0, 1)).mb_substr($text, 1);
+
         return self::shorten($text, $max);
     }
 

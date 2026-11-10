@@ -22,6 +22,12 @@ class ExcerptTest extends TestCase
     }
 
     #[Test]
+    public function a_quote_starts_like_a_sentence_when_a_mention_is_removed()
+    {
+        $this->assertSame('You asked what I am reading this week.', Excerpt::fromHtml('<p><a class="UserMention">@sam</a> you asked what I am reading this week.</p>'));
+    }
+
+    #[Test]
     public function long_posts_end_at_a_sentence_or_a_word()
     {
         $sentence = str_repeat('word ', 30).'end. '.str_repeat('more ', 40);
