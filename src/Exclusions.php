@@ -4,8 +4,8 @@ namespace ErnestDefoe\WhoSaidIt;
 
 use Carbon\Carbon;
 use Flarum\Extension\ExtensionManager;
+use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Database\ConnectionInterface;
-use Illuminate\Database\Query\Builder;
 
 /**
  * Members who are left out of the game: never quoted, never shown as a
@@ -13,6 +13,9 @@ use Illuminate\Database\Query\Builder;
  * members suspended right now (flarum/suspend). Applied when a quiz is made
  * AND every time one is shown, so opting out (or a suspension, or a change
  * to the groups) takes effect on today's and yesterday's quizzes at once.
+ *
+ * 🚨 One plain subquery per source, never a UNION: MySQL 5.7, MariaDB 10.3
+ * and PostgreSQL reject the parenthesised union Laravel writes inside IN.
  */
 class Exclusions
 {
@@ -23,21 +26,19 @@ class Exclusions
     ) {
     }
 
-    /** A subquery of the excluded user ids: no list of ids, however many there are. */
-    public function subquery(): \Closure
+    /** Leave the excluded members out of a query, by its user id column. */
+    public function leaveOut(Builder $query, string $column): Builder
     {
-        $groups = $this->settings->groups();
-        $suspend = $this->extensions->isEnabled('flarum-suspend');
+        $query->whereNotIn($column, fn ($q) => $q->select('user_id')->from('who_said_it_players')->where('opted_out', true));
 
-        return function (Builder $query) use ($groups, $suspend) {
-            $query->select('user_id')->from('who_said_it_players')->where('opted_out', true);
-            if ($groups) {
-                $query->union($this->db->table('group_user')->select('user_id')->whereIn('group_id', $groups));
-            }
-            if ($suspend) {
-                $query->union($this->db->table('users')->select('id')->where('suspended_until', '>', Carbon::now()));
-            }
-        };
+        if ($groups = $this->settings->groups()) {
+            $query->whereNotIn($column, fn ($q) => $q->select('user_id')->from('group_user')->whereIn('group_id', $groups));
+        }
+        if ($this->extensions->isEnabled('flarum-suspend')) {
+            $query->whereNotIn($column, fn ($q) => $q->select('id')->from('users')->where('suspended_until', '>', Carbon::now()));
+        }
+
+        return $query;
     }
 
     /**
@@ -53,8 +54,8 @@ class Exclusions
             return [];
         }
 
-        $out = $this->db->table('users')->whereIn('id', $ids)->whereIn('id', $this->subquery())->pluck('id')->all();
+        $in = $this->leaveOut($this->db->table('users')->whereIn('id', $ids), 'id')->pluck('id')->all();
 
-        return array_fill_keys(array_map('intval', $out), true);
+        return array_fill_keys(array_values(array_diff($ids, array_map('intval', $in))), true);
     }
 }

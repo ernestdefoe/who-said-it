@@ -218,7 +218,7 @@ class Generator
             ->where('posts.created_at', '<=', Carbon::now()->subDays($minAge))
             // A cheap first cut on the stored markup; the cleaned excerpt is measured again.
             ->whereRaw('LENGTH('.$this->db->getQueryGrammar()->wrap('posts.content').') >= ?', [$minLength])
-            ->whereNotIn('posts.user_id', $this->exclusions->subquery())
+            ->tap(fn ($q) => $this->exclusions->leaveOut($q, 'posts.user_id'))
             ->whereNotIn('posts.discussion_id', fn ($q) => $q->select('id')->from('discussions')->where('is_private', true));
 
         if ($repeat > 0) {
@@ -248,7 +248,7 @@ class Generator
         $count = $this->db->getQueryGrammar()->wrap('comment_count');
         $base = fn () => User::query()
             ->where('id', '!=', $author->id)
-            ->whereNotIn('id', $this->exclusions->subquery())
+            ->tap(fn ($q) => $this->exclusions->leaveOut($q, 'id'))
             ->where('comment_count', '>', 0)
             ->where(fn ($q) => $q->whereNull('joined_at')->orWhere('joined_at', '<=', $post->created_at))
             // Distance in post count. 🚨 comment_count is UNSIGNED on MySQL: `count - n` below zero is an

@@ -374,7 +374,6 @@ class QuizTest extends TestCase
 
         $this->make();
         $this->assertSame(0, Question::query()->where('author_id', 3)->count());
-        $this->assertSame(0, Question::query()->where('choices', 'like', '%3%')->whereRaw('0')->count());
         foreach (Question::query()->get() as $q) {
             $this->assertNotContains(3, $q->choiceIds(), 'opted out = not a choice either');
         }
