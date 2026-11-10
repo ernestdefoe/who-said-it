@@ -37,7 +37,7 @@ ernestdefoe-who-said-it:
 
     page:
       title: Who Said It?
-      lead: Five real quotes from this forum. For each one, pick the member who wrote it.
+      lead: Real quotes from this forum, new every day. For each one, pick the member who wrote it.
       players: "{count, plural, one {# player today} other {# players today}}"
       streak: "{count, plural, =0 {No streak yet} one {#-day streak} other {#-day streak}}"
 
