@@ -14,6 +14,7 @@ final class Settings
     public const REPEAT_DAYS = self::PREFIX.'repeat_days';
     public const ACTIVE_DAYS = self::PREFIX.'active_days';
     public const TAGS = self::PREFIX.'tags';
+    public const GROUPS = self::PREFIX.'never_quote_groups';
     public const TIMEZONE = self::PREFIX.'timezone';
 
     public const VIEW = 'whoSaidIt.view';
@@ -26,6 +27,7 @@ final class Settings
         self::REPEAT_DAYS => 365,
         self::ACTIVE_DAYS => 90,
         self::TAGS => '[]',
+        self::GROUPS => '[]',
         self::TIMEZONE => 'UTC',
     ];
 
@@ -48,7 +50,23 @@ final class Settings
     /** @return list<int> */
     public function tags(): array
     {
-        $ids = json_decode((string) $this->settings->get(self::TAGS), true);
+        return $this->ids(self::TAGS);
+    }
+
+    /**
+     * Groups whose members are never quoted nor shown as a choice (bots, feeds, staff…).
+     *
+     * @return list<int>
+     */
+    public function groups(): array
+    {
+        return $this->ids(self::GROUPS);
+    }
+
+    /** @return list<int> */
+    private function ids(string $key): array
+    {
+        $ids = json_decode((string) $this->settings->get($key), true);
 
         return is_array($ids) ? array_values(array_unique(array_filter(array_map('intval', $ids)))) : [];
     }

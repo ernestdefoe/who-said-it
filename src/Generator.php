@@ -133,7 +133,6 @@ class Generator
     {
         $random = new Randomizer();
         $minLength = $this->settings->int(Settings::MIN_LENGTH, 20, 200);
-        $optedOut = $this->optedOut();
         $picks = [];
         $authors = [];
         $tried = [];
@@ -157,7 +156,7 @@ class Generator
                 continue;
             }
 
-            $others = $this->distractors($author, $optedOut, $random);
+            $others = $this->distractors($author, $random);
             if (count($others) < 3) {
                 continue;
             }
@@ -197,6 +196,22 @@ class Generator
         yield from $this->eligible()->with('user')->orderByDesc('posts.id')->limit(60)->get()->shuffle();
     }
 
+    /**
+     * Members never quoted nor shown as a choice: those who opted out, and the members of the
+     * groups the admin listed. A subquery, so a big group never becomes a long list of ids.
+     */
+    private function excluded(): \Closure
+    {
+        $groups = $this->settings->groups();
+
+        return function ($query) use ($groups) {
+            $query->select('user_id')->from('who_said_it_players')->where('opted_out', true);
+            if ($groups) {
+                $query->union($this->db->table('group_user')->select('user_id')->whereIn('group_id', $groups));
+            }
+        };
+    }
+
     /** @return Builder<Post> */
     public function eligible(): Builder
     {
@@ -213,7 +228,7 @@ class Generator
             ->where('posts.created_at', '<=', Carbon::now()->subDays($minAge))
             // A cheap first cut on the stored markup; the cleaned excerpt is measured again.
             ->whereRaw('LENGTH('.$this->db->getQueryGrammar()->wrap('posts.content').') >= ?', [$minLength])
-            ->whereNotIn('posts.user_id', Player::query()->select('user_id')->where('opted_out', true))
+            ->whereNotIn('posts.user_id', $this->excluded())
             ->whereNotIn('posts.discussion_id', fn ($q) => $q->select('id')->from('discussions')->where('is_private', true));
 
         if ($repeat > 0) {
@@ -229,26 +244,19 @@ class Generator
         return $query;
     }
 
-    /** @return list<int> */
-    private function optedOut(): array
-    {
-        return Player::query()->where('opted_out', true)->pluck('user_id')->map(fn ($id) => (int) $id)->all();
-    }
-
     /**
      * Three other members with about as many posts as the author, picked
      * from the dozen closest. Active members first; anyone with posts when
      * the forum is quiet.
      *
-     * @param list<int> $optedOut
      * @return list<int>
      */
-    private function distractors(User $author, array $optedOut, Randomizer $random): array
+    private function distractors(User $author, Randomizer $random): array
     {
         $count = $this->db->getQueryGrammar()->wrap('comment_count');
         $base = fn () => User::query()
             ->where('id', '!=', $author->id)
-            ->whereNotIn('id', $optedOut)
+            ->whereNotIn('id', $this->excluded())
             ->where('is_email_confirmed', true)
             ->where('comment_count', '>', 0)
             // Distance in post count. 🚨 comment_count is UNSIGNED on MySQL: `count - n` below zero is an

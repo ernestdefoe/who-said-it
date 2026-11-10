@@ -2,6 +2,7 @@ import app from 'flarum/admin/app';
 import Extend from 'flarum/common/extenders';
 import StatusPanel from './StatusPanel';
 import TagPicker from './TagPicker';
+import GroupPicker from './GroupPicker';
 
 const t = (key: string) => app.translator.trans(`ernestdefoe-who-said-it.admin.${key}`, {}, true);
 const setting = (key: string) => `ernestdefoe-who-said-it.${key}`;
@@ -59,6 +60,9 @@ export default [
     .customSetting(function (this: any) {
       return TagPicker.component({ stream: this.setting(setting('tags')) });
     }, 40)
+    .customSetting(function (this: any) {
+      return GroupPicker.component({ stream: this.setting(setting('never_quote_groups')) });
+    }, 35)
     .permission(() => ({ permission: 'whoSaidIt.view', icon: 'fas fa-quote-left', label: t('permissions.view'), allowGuest: true }), 'view', 60)
     .permission(() => ({ permission: 'whoSaidIt.play', icon: 'fas fa-quote-left', label: t('permissions.play') }), 'reply', 60),
 ];

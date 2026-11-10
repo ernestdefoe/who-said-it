@@ -41,10 +41,15 @@ The three other choices are active members with a similar number of posts. If a 
 - How old a quote must be, its shortest length, the repeat window
 - How recently the other choices must have been seen
 - Which tags quotes may come from
+- Never quote members of these groups (bots, feed importers, staff…): they're never quoted and never shown as a choice
 - Show the link in the sidebar
 - Permissions: view (boards and yesterday's answers; guests by default) and play (members by default)
 
 The admin page shows whether today's quiz is made, how many members finished it, and how many posts qualify under your settings, with a button to make today's quiz now. It never shows the quotes, so admins can play too.
+
+## Known limit
+
+Quotes come only from posts a guest can read. On a forum that guests can't read at all (members only), there is nothing to quote, so no quiz is made.
 
 ## Install
 

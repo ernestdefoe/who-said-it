@@ -14,6 +14,8 @@ ernestdefoe-who-said-it:
       active: Other choices are members seen in the last this many days
       active_help: The three other faces are members with a similar number of posts. If too few were seen lately, anyone with posts is used.
       tags: Only quote posts in these tags
+      groups: Never quote members of these groups
+      groups_help: For bots, feed importers or anyone else who shouldn't be in the game. Members of these groups are never quoted and never shown as a choice. Members can also opt themselves out in their settings.
       tags_help: Leave all unticked to use every tag. Only posts that guests can read are ever quoted, so private discussions and restricted tags are never used.
     status:
       title: Today

@@ -74,6 +74,7 @@ return [
         ->default(Settings::REPEAT_DAYS, Settings::DEFAULTS[Settings::REPEAT_DAYS])
         ->default(Settings::ACTIVE_DAYS, Settings::DEFAULTS[Settings::ACTIVE_DAYS])
         ->default(Settings::TAGS, Settings::DEFAULTS[Settings::TAGS])
+        ->default(Settings::GROUPS, Settings::DEFAULTS[Settings::GROUPS])
         ->default(Settings::TIMEZONE, Settings::DEFAULTS[Settings::TIMEZONE])
         ->serializeToForum('whoSaidItNav', Settings::NAV, 'boolval'),
 

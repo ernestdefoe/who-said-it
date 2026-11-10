@@ -387,6 +387,20 @@ class QuizTest extends TestCase
     }
 
     #[Test]
+    public function members_of_a_never_quote_group_are_neither_quoted_nor_a_choice()
+    {
+        $this->setting('ernestdefoe-who-said-it.never_quote_groups', json_encode([4]));
+        $this->prepareDatabase(['group_user' => [['user_id' => 3, 'group_id' => 4], ['user_id' => 5, 'group_id' => 4]]]);
+
+        $this->make();
+        $this->assertSame(0, Question::query()->whereIn('author_id', [3, 5])->count());
+        foreach (Question::query()->get() as $q) {
+            $this->assertSame([], array_intersect([3, 5], $q->choiceIds()), 'never shown as a choice either');
+        }
+        $this->assertSame(5, Question::query()->count(), 'the other five authors still fill the day');
+    }
+
+    #[Test]
     public function reminders_go_once_to_members_who_asked_and_have_not_played()
     {
         $this->app();
