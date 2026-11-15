@@ -24,17 +24,13 @@
 
 use ErnestDefoe\WhoSaidIt\Api;
 use ErnestDefoe\WhoSaidIt\Console\MakeCommand;
-use ErnestDefoe\WhoSaidIt\ForumState;
 use ErnestDefoe\WhoSaidIt\Gdpr\ForgetErased;
 use ErnestDefoe\WhoSaidIt\Gdpr\WhoSaidItData;
 use ErnestDefoe\WhoSaidIt\Http\PageContent;
 use ErnestDefoe\WhoSaidIt\Listener\ForgetDeleted;
 use ErnestDefoe\WhoSaidIt\Listener\RedrawYesterday;
 use ErnestDefoe\WhoSaidIt\Notification\ReminderBlueprint;
-use ErnestDefoe\WhoSaidIt\Settings;
-use Flarum\Api\Context;
 use Flarum\Api\Resource\ForumResource;
-use Flarum\Api\Schema;
 use Flarum\Extend;
 use Flarum\Gdpr\Events\Erased;
 use Flarum\Gdpr\Extend\UserData;
@@ -76,11 +72,7 @@ return [
     new Extend\ApiResource(Api\Resource\PlayerResource::class),
 
     (new Extend\ApiResource(ForumResource::class))
-        ->fields(fn () => [
-            Schema\Arr::make('whoSaidIt')
-                ->visible(fn ($forum, Context $context) => $context->getActor()->can(Settings::VIEW))
-                ->get(fn ($forum, Context $context) => resolve(ForumState::class)($context->getActor())),
-        ]),
+        ->fields(Api\ForumFields::class),
 
     // 🚨 String keys, not Settings::… constants: extend.php runs while composer may be swapping
     // the package, and autoloading one of our classes here would fatal every request mid-deploy.
