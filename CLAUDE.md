@@ -19,6 +19,8 @@
 - **Unfinished past days are finished** (`Quiz::settle`: scheduler for everyone, the member's next visit for them), so points and streaks aren't lost; a day with nothing answered is dropped.
 - **Deleting a member goes through `Forget`**, a plain class: the GDPR data type extends flarum/gdpr's class and must never load when gdpr isn't installed.
 - While another request holds the build lock, the page says "on its way" (`pending`) and /next answers 503 `wsi_making`.
+- **Records are JSON:API, playing is not.** `who-said-it-players` (Api\Resource\PlayerResource) is the all-time board and each member's own reminder/opt-out (visible and writable only to them, made on first use). Page/next/answer/admin stay plain endpoints ON PURPOSE (the answer gate and the server clock); keep that reasoning in extend.php and the README if they change. Don't add a resource that can reach a quote's author.
+- **Floxum 100 rules held here:** routes/notification/model via Extend.Routes/Notification/Store in `js/src/forum/extend.ts`; `npm run check-typings` (CI) passes; every `.catch` calls `showError` and resets its state; per-member cache lock (`Quiz::exclusive`) around the score/record row locks (SQLite ignores row locks); racing inserts use `insertOrIgnore`; extend.php reads no class constants at load time and calls no `resolve()` (ForumFields, listener classes); functions stay under 50 lines.
 - Never name a translation parameter `user` (Flarum's translator treats it as a User model).
 - Themes recolour links: every text colour inside our `<a>` elements is set under `html:not(#x-wsi)`.
 - Mithril: siblings are all keyed or none; the quote is keyed alone inside `.WsiQuote-wrap` so its entrance replays.
@@ -27,5 +29,6 @@
 ## Testing
 
 - `composer test:setup && composer test` (integration; SQLite and prefixed MySQL both pass), `composer analyse:phpstan`.
-- `cd js && npm ci && npm run build && npm run format-check`.
+- `cd js && npm ci && npm run build && npm run format-check && npm run check-typings`.
+- Before calling a run MySQL or PostgreSQL, set DB_DRIVER and check `composer test:setup` prints that driver (it silently falls back to SQLite).
 - The showcase seed is `~/github/showcase/seeds/98-who-said-it.php` (makes and plays five past days + today through Generator/Quiz with the clock moved). Local runner and puppeteer scripts: `~/github/scopes/who-said-it-shots`.
