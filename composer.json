@@ -53,9 +53,11 @@
                 "color": "#fff"
             },
             "optional-dependencies": [
+                "ernestdefoe/bespoke",
                 "flarum/gdpr",
                 "flarum/suspend",
-                "flarum/tags"
+                "flarum/tags",
+                "fof/forum-widgets-core"
             ]
         }
     },

@@ -3,6 +3,8 @@
 namespace ErnestDefoe\WhoSaidIt;
 
 use Flarum\Database\AbstractModel;
+use Flarum\User\User;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $user_id
@@ -14,6 +16,7 @@ use Flarum\Database\AbstractModel;
  * @property string|null $last_day
  * @property bool $remind
  * @property bool $opted_out
+ * @property User|null $user
  */
 class Player extends AbstractModel
 {
@@ -29,6 +32,12 @@ class Player extends AbstractModel
         'user_id' => 'integer', 'total_score' => 'integer', 'quizzes' => 'integer', 'correct_total' => 'integer',
         'streak' => 'integer', 'best_streak' => 'integer', 'remind' => 'boolean', 'opted_out' => 'boolean',
     ];
+
+    /** @return BelongsTo<User, $this> */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     /** The streak as it stands today: one missed day and it's gone. */
     public function currentStreak(string $today, string $yesterday): int

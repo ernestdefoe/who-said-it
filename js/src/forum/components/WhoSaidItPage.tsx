@@ -11,7 +11,8 @@ import extractText from 'flarum/common/utils/extractText';
 import type Mithril from 'mithril';
 import { t } from '../../common/text';
 import { call, dayLabel, pushUsers, shareText, user, type PageData, type Reveal, type Served } from '../api';
-import { remember, saveMe, span, type Me } from '../state';
+import { remember, saveMe, showError, span, type Me } from '../state';
+import type Player from '../models/Player';
 
 declare const m: import('mithril').Static;
 declare const flarum: any;
@@ -35,6 +36,9 @@ export default class WhoSaidItPage extends Page {
   busy = false;
   picked: number | null = null;
   board: 'today' | 'all' = 'today';
+  /** The all-time board (the `who-said-it-players` resource), fetched the first time its tab opens. */
+  leaders: Player[] | null = null;
+  leadersLoading = false;
   copied = false;
   remindSaving = false;
   ticker = 0;
@@ -74,8 +78,29 @@ export default class WhoSaidItPage extends Page {
         // Another visitor is making today's quiz this very moment: ask again shortly.
         if (data.pending) this.retry = window.setTimeout(() => this.load(), 4000);
       })
-      .catch(() => (this.phase = 'error'))
+      .catch((error) => {
+        // The page says it couldn't load (in place of the quiz), and the alert says why.
+        this.phase = 'error';
+        showError(error);
+      })
       .finally(() => m.redraw());
+  }
+
+  /** The all-time board, from the `who-said-it-players` resource: once, when its tab is first opened. */
+  loadLeaders(force = false) {
+    if (this.leadersLoading || (this.leaders && !force)) return;
+    this.leadersLoading = true;
+    app.store
+      .find<Player[]>('who-said-it-players')
+      .then((players) => (this.leaders = players))
+      .catch((error) => {
+        this.leaders = [];
+        showError(error);
+      })
+      .finally(() => {
+        this.leadersLoading = false;
+        m.redraw();
+      });
   }
 
   view() {
@@ -467,12 +492,15 @@ export default class WhoSaidItPage extends Page {
             sub: t('forum.boards.today_sub', { correct: row.correct, count: data.day?.count || 5 }),
             grid: row.grid,
           }))
-        : data.allTime.map((row) => ({
-            user: row.user,
-            main: row.total,
-            sub: t('forum.boards.all_sub', { quizzes: row.quizzes, best: row.best }),
-            grid: null as string | null,
-          }));
+        : (this.leaders || []).map((player) => {
+            const member = player.user();
+            return {
+              user: member ? Number(member.id()) : 0,
+              main: player.totalScore(),
+              sub: t('forum.boards.all_sub', { quizzes: player.quizzes(), best: player.bestStreak() }),
+              grid: null as string | null,
+            };
+          });
 
     return (
       <section className="WsiBoard">
@@ -487,14 +515,19 @@ export default class WhoSaidItPage extends Page {
                 role="tab"
                 aria-selected={this.board === tab ? 'true' : 'false'}
                 className={classList('WsiTab', this.board === tab && 'is-active')}
-                onclick={() => (this.board = tab)}
+                onclick={() => {
+                  this.board = tab;
+                  if (tab === 'all') this.loadLeaders();
+                }}
               >
                 {t(`forum.boards.${tab}`)}
               </button>
             ))}
           </div>
         </div>
-        {rows.length ? (
+        {this.board === 'all' && !this.leaders ? (
+          <LoadingIndicator display="block" size="small" />
+        ) : rows.length ? (
           <ol className="WsiBoard-list">
             {rows.map((row, i) => {
               const u = user(row.user);
@@ -574,18 +607,25 @@ export default class WhoSaidItPage extends Page {
         remember({ me: res.me! });
         if (res.current) {
           this.show(res.current);
-        } else {
-          this.current = null;
-          this.reveal = null;
-          this.phase = 'done';
-          // The boards and the recap now include this member's day.
-          return call<PageData>('GET', '').then((data) => {
-            this.data = data;
-            pushUsers(data.users);
-          });
+          return undefined;
         }
+        this.current = null;
+        this.reveal = null;
+        this.phase = 'done';
+        // The boards and the recap now include this member's day.
+        if (this.leaders) this.loadLeaders(true);
+        return call<PageData>('GET', '').then((data) => {
+          this.data = data;
+          pushUsers(data.users);
+        });
       })
-      .catch(() => {})
+      .catch((error) => {
+        // Back to the start card: its button asks for the next quote again.
+        this.current = null;
+        this.reveal = null;
+        this.phase = this.data?.me?.finished ? 'done' : 'intro';
+        showError(error);
+      })
       .finally(() => {
         this.busy = false;
         m.redraw();
@@ -609,11 +649,12 @@ export default class WhoSaidItPage extends Page {
         this.phase = 'reveal';
         if (navigator.vibrate && res.reveal.correct === false) navigator.vibrate(40);
       })
-      .catch(() => {
+      .catch((error) => {
         this.picked = null;
-        // Withdrawn or closed meanwhile: move on to whatever comes next.
+        // Withdrawn or closed meanwhile: back to the start card, whose button moves on to what's next.
         this.current = null;
         this.phase = 'intro';
+        showError(error);
       })
       .finally(() => {
         this.busy = false;
@@ -645,7 +686,8 @@ export default class WhoSaidItPage extends Page {
       .then((res) => {
         if (this.data?.me) this.data.me.remind = res.remind;
       })
-      .catch(() => {})
+      // The switch keeps showing the stored choice (it never changed), and the member is told why.
+      .catch(showError)
       .finally(() => {
         this.remindSaving = false;
         m.redraw();

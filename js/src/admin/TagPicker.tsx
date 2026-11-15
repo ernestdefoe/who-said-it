@@ -24,7 +24,8 @@ export default class TagPicker extends Component<{ stream: Stream<string> }> {
         this.tags = app.store.all('tags');
         m.redraw();
       })
-      .catch(() => {});
+      // The tags already in the store stay listed; the admin is told the rest couldn't load.
+      .catch(() => app.alerts.show({ type: 'error' }, t('tags_failed')));
   }
 
   selected(): number[] {

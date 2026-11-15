@@ -23,6 +23,7 @@ interface Status {
 export default class StatusPanel extends Component {
   status: Status | null = null;
   busy = false;
+  failed = false;
 
   oninit(vnode: any) {
     super.oninit(vnode);
@@ -32,9 +33,23 @@ export default class StatusPanel extends Component {
   load(method: 'GET' | 'POST') {
     this.busy = method === 'POST';
     app
-      .request<Status>({ method, url: app.forum.attribute<string>('apiUrl') + '/who-said-it/admin' })
-      .then((status) => (this.status = status))
-      .catch(() => {})
+      .request<Status>({
+        method,
+        url: app.forum.attribute<string>('apiUrl') + '/who-said-it/admin',
+        errorHandler: (error: any) => {
+          throw error;
+        },
+      })
+      .then((status) => {
+        this.status = status;
+        this.failed = false;
+      })
+      .catch((error: any) => {
+        // "Not enough quotes" from Make today's quiz now, or the status that couldn't load: say which.
+        const notEnough = error?.response?.errors?.[0]?.code === 'wsi_not_enough';
+        app.alerts.show({ type: 'error' }, t(notEnough ? 'not_enough' : 'failed'));
+        if (!this.status) this.failed = true;
+      })
       .finally(() => {
         this.busy = false;
         m.redraw();
@@ -47,7 +62,9 @@ export default class StatusPanel extends Component {
     return (
       <div className="Form-group WsiAdminStatus">
         <label>{t('title')}</label>
-        {!s ? (
+        {this.failed ? (
+          <p className="helpText">{t('failed')}</p>
+        ) : !s ? (
           <LoadingIndicator display="inline" size="small" />
         ) : (
           <div className="WsiAdminStatus-box">

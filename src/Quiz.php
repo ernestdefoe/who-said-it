@@ -6,6 +6,8 @@ use Carbon\Carbon;
 use Flarum\Post\Post;
 use Flarum\User\Guest;
 use Flarum\User\User;
+use Illuminate\Cache\Repository;
+use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\QueryException;
@@ -191,7 +193,7 @@ class Quiz
         $correct = $choice === $question->author_id;
         $points = Scoring::points($correct, $ms);
 
-        $recorded = $this->db->transaction(function () use ($answer, $choice, $correct, $points, $ms, $day, $actor, $question) {
+        $recorded = $this->exclusive($actor->id, fn () => $this->db->transaction(function () use ($answer, $choice, $correct, $points, $ms, $day, $actor, $question) {
             $updated = Answer::query()->whereKey($answer->id)->whereNull('answered_at')->update([
                 'answered_at' => Carbon::now(),
                 'choice_id' => $choice,
@@ -216,7 +218,7 @@ class Quiz
             }
 
             return true;
-        });
+        }));
 
         $answer->refresh();
         if (! $recorded) {
@@ -243,7 +245,7 @@ class Quiz
      */
     public function finish(Day $day, int $userId, Collection $questions, array $live): void
     {
-        $finished = $this->db->transaction(function () use ($day, $userId, $questions, $live) {
+        $finished = $this->exclusive($userId, fn () => $this->db->transaction(function () use ($day, $userId, $questions, $live) {
             /** @var Score|null $score */
             $score = Score::query()->where('day_id', $day->id)->where('user_id', $userId)->lockForUpdate()->first();
             if (! $score || $score->finished_at) {
@@ -273,13 +275,32 @@ class Quiz
             }
 
             return true;
-        });
+        }));
 
         if ($finished) {
             // Their name may be on the boards now.
             $this->cache->forget('ernestdefoe-who-said-it.today.'.$day->id);
-            $this->cache->forget('ernestdefoe-who-said-it.alltime.'.$this->clock->today());
         }
+    }
+
+    /**
+     * One member's score and record change one request at a time. The row
+     * locks below do that on MySQL and PostgreSQL; SQLite ignores them, so a
+     * cache lock per member makes it hold everywhere. Never nested: answer()
+     * releases its lock before finish() takes it.
+     *
+     * @template T
+     * @param callable(): T $work
+     * @return T
+     */
+    private function exclusive(int $userId, callable $work): mixed
+    {
+        $store = $this->cache instanceof Repository ? $this->cache->getStore() : null;
+        if (! $store instanceof LockProvider) {
+            return $work();
+        }
+
+        return $store->lock('ernestdefoe-who-said-it.member.'.$userId, 10)->block(5, $work);
     }
 
     /**

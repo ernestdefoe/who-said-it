@@ -1,7 +1,7 @@
 import app from 'flarum/forum/app';
 import extractText from 'flarum/common/utils/extractText';
 import { t } from '../common/text';
-import type { Me } from './state';
+import { rethrow, type Me } from './state';
 
 export interface UserRow {
   id: number;
@@ -47,7 +47,6 @@ export interface PageData {
   me: (Me & { rank: number | null; best: number; total: number; quizzes: number }) | null;
   played: Reveal[];
   current: Served | null;
-  allTime: { user: number; total: number; quizzes: number; correct: number; best: number; streak: number }[];
   yesterday: { date: string; questions: Reveal[] } | null;
   users: UserRow[];
   /** Today's quiz is being made by another request right now. */
@@ -59,12 +58,8 @@ export function call<T>(method: 'GET' | 'POST', path: string, body?: Record<stri
     method,
     url: app.forum.attribute<string>('apiUrl') + '/who-said-it' + path,
     body,
-    errorHandler: (error: any) => {
-      const code = error?.response?.errors?.[0]?.code;
-      const known = ['wsi_closed', 'wsi_withdrawn', 'wsi_no_quiz', 'wsi_making', 'wsi_bad_choice', 'wsi_not_shown'];
-      app.alerts.show({ type: 'error' }, known.includes(code) ? t(`forum.errors.${code}`) : t('forum.errors.generic'));
-      throw error;
-    },
+    // The caller shows the error (showError) and puts its own state back.
+    errorHandler: rethrow,
   });
 }
 

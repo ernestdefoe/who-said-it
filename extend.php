@@ -11,21 +11,32 @@
  *
  * forum.js only wires the route, the sidebar card, the settings switches and
  * the reminder; the page is a lazy chunk.
+ *
+ * Members' all-time records (the all-time board, their own reminder and
+ * opt-out) are a JSON:API resource, `who-said-it-players`. Playing is a few
+ * plain endpoints under /api/who-said-it ON PURPOSE: a quote's answer may
+ * only leave the server after that member has answered it, and the quiz's
+ * clock starts when a quote is served. A JSON:API resource for quotes would
+ * let an include or a filter walk around that gate, and an answer isn't a
+ * resource but an action that is checked, timed and scored once. The admin
+ * endpoint is an action too (make today's quiz) plus a status summary.
  */
 
 use ErnestDefoe\WhoSaidIt\Api;
-use ErnestDefoe\WhoSaidIt\Board;
-use ErnestDefoe\WhoSaidIt\Forget;
 use ErnestDefoe\WhoSaidIt\Console\MakeCommand;
 use ErnestDefoe\WhoSaidIt\ForumState;
+use ErnestDefoe\WhoSaidIt\Gdpr\ForgetErased;
 use ErnestDefoe\WhoSaidIt\Gdpr\WhoSaidItData;
 use ErnestDefoe\WhoSaidIt\Http\PageContent;
+use ErnestDefoe\WhoSaidIt\Listener\ForgetDeleted;
+use ErnestDefoe\WhoSaidIt\Listener\RedrawYesterday;
 use ErnestDefoe\WhoSaidIt\Notification\ReminderBlueprint;
 use ErnestDefoe\WhoSaidIt\Settings;
 use Flarum\Api\Context;
 use Flarum\Api\Resource\ForumResource;
 use Flarum\Api\Schema;
 use Flarum\Extend;
+use Flarum\Gdpr\Events\Erased;
 use Flarum\Gdpr\Extend\UserData;
 use Flarum\Settings\Event\Saved;
 use Flarum\User\Event\Deleting;
@@ -49,7 +60,6 @@ return [
         ->get('/who-said-it', 'who-said-it.page', Api\PageController::class)
         ->post('/who-said-it/next', 'who-said-it.next', Api\NextController::class)
         ->post('/who-said-it/answer', 'who-said-it.answer', Api\AnswerController::class)
-        ->post('/who-said-it/me', 'who-said-it.me', Api\MeController::class)
         ->get('/who-said-it/admin', 'who-said-it.admin', Api\AdminController::class)
         ->post('/who-said-it/admin', 'who-said-it.admin.make', Api\AdminController::class),
 
@@ -63,6 +73,8 @@ return [
     (new Extend\Notification())
         ->type(ReminderBlueprint::class, ['alert']),
 
+    new Extend\ApiResource(Api\Resource\PlayerResource::class),
+
     (new Extend\ApiResource(ForumResource::class))
         ->fields(fn () => [
             Schema\Arr::make('whoSaidIt')
@@ -70,30 +82,27 @@ return [
                 ->get(fn ($forum, Context $context) => resolve(ForumState::class)($context->getActor())),
         ]),
 
+    // 🚨 String keys, not Settings::… constants: extend.php runs while composer may be swapping
+    // the package, and autoloading one of our classes here would fatal every request mid-deploy.
     (new Extend\Settings())
-        ->default(Settings::NAV, Settings::DEFAULTS[Settings::NAV])
-        ->default(Settings::MIN_AGE, Settings::DEFAULTS[Settings::MIN_AGE])
-        ->default(Settings::MIN_LENGTH, Settings::DEFAULTS[Settings::MIN_LENGTH])
-        ->default(Settings::REPEAT_DAYS, Settings::DEFAULTS[Settings::REPEAT_DAYS])
-        ->default(Settings::ACTIVE_DAYS, Settings::DEFAULTS[Settings::ACTIVE_DAYS])
-        ->default(Settings::TAGS, Settings::DEFAULTS[Settings::TAGS])
-        ->default(Settings::GROUPS, Settings::DEFAULTS[Settings::GROUPS])
-        ->default(Settings::TIMEZONE, Settings::DEFAULTS[Settings::TIMEZONE])
-        ->serializeToForum('whoSaidItNav', Settings::NAV, 'boolval'),
+        ->default('ernestdefoe-who-said-it.nav', true)
+        ->default('ernestdefoe-who-said-it.min_age_days', 7)
+        ->default('ernestdefoe-who-said-it.min_length', 60)
+        ->default('ernestdefoe-who-said-it.repeat_days', 365)
+        ->default('ernestdefoe-who-said-it.active_days', 90)
+        ->default('ernestdefoe-who-said-it.tags', '[]')
+        ->default('ernestdefoe-who-said-it.never_quote_groups', '[]')
+        ->default('ernestdefoe-who-said-it.timezone', 'UTC')
+        ->serializeToForum('whoSaidItNav', 'ernestdefoe-who-said-it.nav', 'boolval'),
 
-    // Before the user row goes: their answers go with it (foreign keys), but their quoted words must too.
     // 🚨 Forget, not the GDPR data type: that class extends flarum/gdpr's, which may not be installed.
     (new Extend\Event())
-        ->listen(Deleting::class, fn (Deleting $event) => resolve(Forget::class)($event->user->id))
-        // A change to who's left out redraws yesterday's answers (today's are checked on every view).
-        ->listen(Saved::class, function (Saved $event) {
-            if (array_key_exists(Settings::GROUPS, $event->settings)) {
-                resolve(Board::class)->forgetYesterday();
-            }
-        }),
+        ->listen(Deleting::class, ForgetDeleted::class)
+        ->listen(Saved::class, RedrawYesterday::class),
 
     (new Extend\Conditional())
         ->whenExtensionEnabled('flarum-gdpr', fn () => [
             (new UserData())->addType(WhoSaidItData::class),
+            (new Extend\Event())->listen(Erased::class, ForgetErased::class),
         ]),
 ];

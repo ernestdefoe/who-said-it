@@ -46,6 +46,19 @@ jobs:
         working-directory: js
         run: npm run format-check
 
+      # The typings come from flarum/core's dist-typings, which composer installs.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Install Flarum (typings)
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Type check
+        working-directory: js
+        run: npm run check-typings
+
       - name: Build
         working-directory: js
         run: npm run build

@@ -1,4 +1,5 @@
 import app from 'flarum/forum/app';
+import { t } from '../common/text';
 
 export interface Me {
   score: number;
@@ -29,7 +30,7 @@ export function today(): Today | null {
 }
 
 /** Keep the card and the settings switches in step with what the page just did. */
-export function remember(patch: Partial<Today> & { me?: Partial<Me> | null }): void {
+export function remember(patch: Partial<Omit<Today, 'me'>> & { me?: Partial<Me> | null }): void {
   const state = today();
   if (!state) return;
   const { me, ...rest } = patch;
@@ -37,17 +38,35 @@ export function remember(patch: Partial<Today> & { me?: Partial<Me> | null }): v
   if (me && state.me) Object.assign(state.me, me);
 }
 
-/** Save the member's own choices (reminder, opt-out). */
+/** Errors the server explains, in the member's words; anything else is "something went wrong". */
+const KNOWN = ['wsi_closed', 'wsi_withdrawn', 'wsi_no_quiz', 'wsi_making', 'wsi_bad_choice', 'wsi_not_shown'];
+
+/** Tell the member a request failed. Every catch calls this: nothing fails silently. */
+export function showError(error: any): void {
+  const code = error?.response?.errors?.[0]?.code;
+  app.alerts.show({ type: 'error' }, KNOWN.includes(code) ? t(`forum.errors.${code}`) : t('forum.errors.generic'));
+}
+
+/** Rejects instead of alerting: the caller decides what the member sees (showError). */
+export const rethrow = (error: any) => {
+  throw error;
+};
+
+/** Save the member's own choices (reminder, opt-out) on their `who-said-it-players` record. */
 export function saveMe(body: { remind?: boolean; optedOut?: boolean }): Promise<{ remind: boolean; optedOut: boolean }> {
+  const id = String(app.session.user!.id());
+
   return app
-    .request<{ remind: boolean; optedOut: boolean }>({
-      method: 'POST',
-      url: app.forum.attribute<string>('apiUrl') + '/who-said-it/me',
-      body,
+    .request<{ data: { attributes: { remind: boolean; optedOut: boolean } } }>({
+      method: 'PATCH',
+      url: `${app.forum.attribute<string>('apiUrl')}/who-said-it-players/${id}`,
+      body: { data: { type: 'who-said-it-players', id, attributes: body } },
+      errorHandler: rethrow,
     })
     .then((res) => {
-      remember({ me: res });
-      return res;
+      const { remind, optedOut } = res.data.attributes;
+      remember({ me: { remind, optedOut } });
+      return { remind, optedOut };
     });
 }
 

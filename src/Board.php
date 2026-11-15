@@ -45,25 +45,6 @@ class Board
             ->count();
     }
 
-    /** @return list<array{user: int, total: int, quizzes: int, correct: int, best: int, streak: int}> */
-    public function allTime(): array
-    {
-        $today = $this->clock->today();
-        $yesterday = $this->clock->yesterday();
-
-        return $this->cache->remember('ernestdefoe-who-said-it.alltime.'.$today, 60, function () use ($today, $yesterday) {
-            return Player::query()->where('quizzes', '>', 0)->orderByDesc('total_score')->orderByDesc('quizzes')->limit(self::TOP)->get()
-                ->map(fn (Player $p) => [
-                    'user' => $p->user_id,
-                    'total' => $p->total_score,
-                    'quizzes' => $p->quizzes,
-                    'correct' => $p->correct_total,
-                    'best' => $p->best_streak,
-                    'streak' => $p->currentStreak($today, $yesterday),
-                ])->values()->all();
-        });
-    }
-
     /**
      * Yesterday's quotes with their answers and how many got each right.
      * A quote whose post has since gone private or been removed is shown as
@@ -142,9 +123,7 @@ class Board
             }
         }
 
-        $out['allTime'] = $this->allTime();
         $out['yesterday'] = $this->yesterday();
-        $userIds = array_merge($userIds, array_column($out['allTime'], 'user'));
         foreach ($out['yesterday']['questions'] ?? [] as $q) {
             $userIds = array_merge($userIds, $q['choices'], [$q['author']]);
         }

@@ -80,6 +80,25 @@ class QuizTest extends TestCase
     }
 
     /** @return array{int, array<string, mixed>|null, string} */
+    private function resource(string $method, string $path, ?int $as, array $body = []): array
+    {
+        $options = $as ? ['authenticatedAs' => $as] : [];
+        if ($method !== 'GET') {
+            $options['json'] = $body;
+        }
+        $response = $this->send($this->request($method, '/api'.$path, $options));
+        $raw = (string) $response->getBody();
+
+        return [$response->getStatusCode(), json_decode($raw, true), $raw];
+    }
+
+    /** A member's own choices, saved on their who-said-it-players record as the settings switches do. */
+    private function choose(int $as, array $attributes): array
+    {
+        return $this->resource('PATCH', "/who-said-it-players/$as", $as, ['data' => ['type' => 'who-said-it-players', 'id' => (string) $as, 'attributes' => $attributes]]);
+    }
+
+    /** @return array{int, array<string, mixed>|null, string} */
     private function api(string $method, string $path, ?int $as, array $body = []): array
     {
         $options = $as ? ['authenticatedAs' => $as] : [];
@@ -368,9 +387,9 @@ class QuizTest extends TestCase
     #[Test]
     public function members_can_opt_out_of_being_quoted_and_into_reminders()
     {
-        [$status, $body] = $this->api('POST', '/me', 3, ['optedOut' => true, 'remind' => true]);
+        [$status, $body] = $this->choose(3, ['optedOut' => true, 'remind' => true]);
         $this->assertSame(200, $status);
-        $this->assertTrue($body['optedOut']);
+        $this->assertTrue($body['data']['attributes']['optedOut']);
 
         $this->make();
         $this->assertSame(0, Question::query()->where('author_id', 3)->count());
@@ -421,8 +440,8 @@ class QuizTest extends TestCase
         $this->next();
         $this->api('POST', '/answer', 2, ['question' => $q1->id, 'choice' => $q1->author_id]);
         $face = current(array_diff($q2->choiceIds(), [$q2->author_id, $q1->author_id]));
-        $this->assertSame(200, $this->api('POST', '/me', $q1->author_id, ['optedOut' => true])[0]);
-        $this->assertSame(200, $this->api('POST', '/me', $face, ['optedOut' => true])[0]);
+        $this->assertSame(200, $this->choose($q1->author_id, ['optedOut' => true])[0]);
+        $this->assertSame(200, $this->choose($face, ['optedOut' => true])[0]);
 
         [, $next, $raw] = $this->next();
         $this->assertSame($q2->id, $next['current']['id']);
@@ -437,10 +456,10 @@ class QuizTest extends TestCase
 
         // Yesterday's answers, already cached, are drawn again without them.
         Day::query()->whereKey($day->id)->update(['day' => Carbon::now()->subDay()->toDateString()]);
-        $this->api('POST', '/me', $q1->author_id, ['optedOut' => false]);
+        $this->choose($q1->author_id, ['optedOut' => false]);
         [, $before] = $this->api('GET', '', null);
         $this->assertFalse($before['yesterday']['questions'][0]['withdrawn']);
-        $this->api('POST', '/me', $q1->author_id, ['optedOut' => true]);
+        $this->choose($q1->author_id, ['optedOut' => true]);
         [, $after, $afterRaw] = $this->api('GET', '', null);
         $this->assertTrue($after['yesterday']['questions'][0]['withdrawn']);
         $this->assertStringNotContainsString($q1->excerpt, $afterRaw);
@@ -551,6 +570,52 @@ class QuizTest extends TestCase
     }
 
     #[Test]
+    public function a_members_choices_are_theirs_alone()
+    {
+        $this->choose(3, ['remind' => true]);
+
+        // Their own record shows them; anyone else's view of it doesn't.
+        [$status, $own] = $this->resource('GET', '/who-said-it-players/3', 3);
+        $this->assertSame(200, $status);
+        $this->assertTrue($own['data']['attributes']['remind']);
+        [, $other, $otherRaw] = $this->resource('GET', '/who-said-it-players/3', 4);
+        $this->assertArrayNotHasKey('remind', $other['data']['attributes']);
+        $this->assertArrayNotHasKey('optedOut', $other['data']['attributes']);
+        [, , $guestRaw] = $this->resource('GET', '/who-said-it-players/3', null);
+        $this->assertStringNotContainsString('optedOut', $guestRaw);
+        $this->assertStringNotContainsString('remind', $otherRaw);
+
+        // Nobody changes another member's choices, a guest least of all.
+        $body = ['data' => ['type' => 'who-said-it-players', 'id' => '3', 'attributes' => ['optedOut' => true]]];
+        $this->assertNotSame(200, $this->resource('PATCH', '/who-said-it-players/3', 4, $body)[0]);
+        $this->assertNotSame(200, $this->resource('PATCH', '/who-said-it-players/3', null, $body)[0]);
+        $this->assertFalse(Player::query()->find(3)->opted_out);
+
+        // A member with no record yet can still save their choices (it's made on first use).
+        $this->assertNull(Player::query()->find(5));
+        $this->assertSame(200, $this->choose(5, ['optedOut' => true])[0]);
+        $this->assertTrue(Player::query()->find(5)->opted_out);
+    }
+
+    #[Test]
+    public function a_gdpr_erasure_forgets_the_member()
+    {
+        $this->extension('flarum-tags', 'flarum-gdpr', 'ernestdefoe-who-said-it');
+        $day = $this->make();
+        $q = Question::query()->where('day_id', $day->id)->first();
+        $this->playAll(2, true);
+
+        $events = $this->app()->getContainer()->make(\Illuminate\Contracts\Events\Dispatcher::class);
+        $events->dispatch(new \Flarum\Gdpr\Events\Erased('author', 'a@machine.local', 'anonymization', User::query()->find($q->author_id)));
+        $events->dispatch(new \Flarum\Gdpr\Events\Erased('normal', 'n@machine.local', 'anonymization', User::query()->find(2)));
+
+        $this->assertSame('', $q->refresh()->excerpt, 'their quote is withdrawn');
+        $this->assertSame(0, Score::query()->where('user_id', 2)->count());
+        $this->assertSame(0, Answer::query()->where('user_id', 2)->count());
+        $this->assertNull(Player::query()->find(2));
+    }
+
+    #[Test]
     public function reminders_go_once_to_members_who_asked_and_have_not_played()
     {
         $this->app();
@@ -584,7 +649,14 @@ class QuizTest extends TestCase
         $this->assertCount(5, $page['yesterday']['questions']);
         $this->assertSame(100, $page['yesterday']['questions'][0]['percent']);
         $this->assertContains($page['yesterday']['questions'][0]['author'], self::AUTHORS);
-        $this->assertNotEmpty($page['allTime']);
+        $this->assertArrayNotHasKey('allTime', $page, 'the all-time board is the who-said-it-players resource');
+
+        $board = $this->resource('GET', '/who-said-it-players', null);
+        $this->assertSame(200, $board[0]);
+        $this->assertSame('2', $board[1]['data'][0]['id']);
+        $this->assertSame(750, $board[1]['data'][0]['attributes']['totalScore']);
+        $this->assertSame(1, $board[1]['data'][0]['attributes']['streak']);
+        $this->assertSame('users', $board[1]['included'][0]['type']);
     }
 
     #[Test]

@@ -202,6 +202,11 @@ class Generator
         yield from $this->eligible()->with('user')->orderByDesc('posts.id')->limit(60)->get()->shuffle();
     }
 
+    private function charLength(): string
+    {
+        return in_array($this->db->getDriverName(), ['mysql', 'mariadb'], true) ? 'CHAR_LENGTH' : 'LENGTH';
+    }
+
     /** @return Builder<Post> */
     public function eligible(): Builder
     {
@@ -217,7 +222,8 @@ class Generator
             ->whereNotNull('posts.user_id')
             ->where('posts.created_at', '<=', Carbon::now()->subDays($minAge))
             // A cheap first cut on the stored markup; the cleaned excerpt is measured again.
-            ->whereRaw('LENGTH('.$this->db->getQueryGrammar()->wrap('posts.content').') >= ?', [$minLength])
+            // Characters everywhere: MySQL's LENGTH() counts bytes, CHAR_LENGTH() characters.
+            ->whereRaw($this->charLength().'('.$this->db->getQueryGrammar()->wrap('posts.content').') >= ?', [$minLength])
             ->tap(fn ($q) => $this->exclusions->leaveOut($q, 'posts.user_id'))
             ->whereNotIn('posts.discussion_id', fn ($q) => $q->select('id')->from('discussions')->where('is_private', true));
 

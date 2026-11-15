@@ -6,9 +6,8 @@ import Switch from 'flarum/common/components/Switch';
 import type Mithril from 'mithril';
 import { t } from '../common/text';
 import { placed } from '../common/fofWidgets';
-import { saveMe, today } from './state';
+import { saveMe, showError, today } from './state';
 import TodayCard from './components/TodayCard';
-import { ReminderNotification } from './notifications';
 import { EXT, KEY, registerWidgets } from './widgets';
 
 export { default as extend } from './extend';
@@ -16,19 +15,12 @@ export { default as extend } from './extend';
 declare const m: import('mithril').Static;
 
 /*
- * forum.js is loaded on every page, so it only wires things up: the route,
- * the sidebar link and card, two settings switches, the widgets and the
- * reminder. The quiz page is its own chunk.
+ * forum.js is loaded on every page, so it only wires things up: the sidebar
+ * link and card, two settings switches and the widgets here; the route, the
+ * reminder and the record model in extend.ts. The quiz page is its own chunk.
  */
 
 app.initializers.add('ernestdefoe/who-said-it', () => {
-  app.routes['who-said-it'] = {
-    path: '/who-said-it',
-    component: () => import('./components/WhoSaidItPage').then(async (page) => (await page.loadCore(), page)),
-  };
-
-  app.notificationComponents.whoSaidItReminder = ReminderNotification;
-
   // String form: these components live in lazy chunks, and extending an imported copy patches one core never renders.
   extend('flarum/forum/components/IndexSidebar', 'navItems', function (items: ItemList<Mithril.Children>) {
     if (!today() || !app.forum.attribute('whoSaidItNav')) return;
@@ -72,7 +64,8 @@ app.initializers.add('ernestdefoe/who-said-it', () => {
 function save(page: any, flag: string, body: { remind?: boolean; optedOut?: boolean }) {
   page[flag] = true;
   saveMe(body)
-    .catch(() => {})
+    // The switch shows the stored choice again (it never changed), and the member is told why.
+    .catch(showError)
     .finally(() => {
       page[flag] = false;
       m.redraw();

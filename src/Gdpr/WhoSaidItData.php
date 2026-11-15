@@ -3,7 +3,6 @@
 namespace ErnestDefoe\WhoSaidIt\Gdpr;
 
 use ErnestDefoe\WhoSaidIt\Answer;
-use ErnestDefoe\WhoSaidIt\Forget;
 use ErnestDefoe\WhoSaidIt\Player;
 use ErnestDefoe\WhoSaidIt\Score;
 use Flarum\Gdpr\Data\Type;
@@ -49,8 +48,11 @@ class WhoSaidItData extends Type
         $this->delete();
     }
 
+    /**
+     * The erasure itself is ForgetErased, on flarum/gdpr's Erased event: this
+     * class is built with `new`, so it can't have Forget injected.
+     */
     public function delete(): void
     {
-        resolve(Forget::class)($this->user->id);
     }
 }

@@ -47,6 +47,10 @@ The three other choices are active members with a similar number of posts. If a 
 
 The admin page shows whether today's quiz is made, how many members finished it, and how many posts qualify under your settings, with a button to make today's quiz now. It never shows the quotes, so admins can play too.
 
+## How it's built
+
+Members' all-time records (the all-time board, and each member's own reminder and opt-out) are a Flarum 2 JSON:API resource, `who-said-it-players`. Playing is a few plain endpoints under `/api/who-said-it` on purpose: a quote's answer may only leave the server after that member has answered it, and its clock starts when the quote is served. A JSON:API resource for quotes would let an include or a filter walk around that gate, and an answer isn't a record to create but an action that is checked, timed and scored once. The admin endpoint is an action too (make today's quiz now), with a status summary.
+
 ## Known limit
 
 Quotes come only from posts a guest can read. On a forum that guests can't read at all (members only), there is nothing to quote, so no quiz is made.
