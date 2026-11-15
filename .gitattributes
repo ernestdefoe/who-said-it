@@ -2,3 +2,4 @@
 /.github export-ignore
 /phpstan.neon export-ignore
 /screenshots export-ignore
+/CLAUDE.md export-ignore
