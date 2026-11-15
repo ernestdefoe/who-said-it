@@ -12,7 +12,7 @@ import type Mithril from 'mithril';
 import { t } from '../../common/text';
 import { call, dayLabel, pushUsers, shareText, user, type PageData, type Reveal, type Served } from '../api';
 import { remember, saveMe, showError, span, type Me } from '../state';
-import type Player from '../models/Player';
+import Boards, { followPost, recapRow, yesterdayList } from './Boards';
 
 declare const m: import('mithril').Static;
 declare const flarum: any;
@@ -35,10 +35,8 @@ export default class WhoSaidItPage extends Page {
   shownAt = 0;
   busy = false;
   picked: number | null = null;
-  board: 'today' | 'all' = 'today';
-  /** The all-time board (the `who-said-it-players` resource), fetched the first time its tab opens. */
-  leaders: Player[] | null = null;
-  leadersLoading = false;
+  /** Goes up when the member finishes, so the all-time board fetches again. */
+  finishes = 0;
   copied = false;
   remindSaving = false;
   ticker = 0;
@@ -86,23 +84,6 @@ export default class WhoSaidItPage extends Page {
       .finally(() => m.redraw());
   }
 
-  /** The all-time board, from the `who-said-it-players` resource: once, when its tab is first opened. */
-  loadLeaders(force = false) {
-    if (this.leadersLoading || (this.leaders && !force)) return;
-    this.leadersLoading = true;
-    app.store
-      .find<Player[]>('who-said-it-players')
-      .then((players) => (this.leaders = players))
-      .catch((error) => {
-        this.leaders = [];
-        showError(error);
-      })
-      .finally(() => {
-        this.leadersLoading = false;
-        m.redraw();
-      });
-  }
-
   view() {
     const { PageStructure, IndexSidebar } = core();
 
@@ -129,8 +110,8 @@ export default class WhoSaidItPage extends Page {
           {this.stage(data)}
         </section>
         <div className="WsiBelow">
-          {this.boards(data)}
-          {this.yesterday(data)}
+          <Boards data={data} version={this.finishes} />
+          {yesterdayList(data)}
         </div>
       </div>
     );
@@ -353,7 +334,7 @@ export default class WhoSaidItPage extends Page {
           </span>
         </div>
         {r.post ? (
-          <a className="WsiVerdict-source" href={r.post.url} onclick={(e: MouseEvent) => this.follow(e, r.post!.url)}>
+          <a className="WsiVerdict-source" href={r.post.url} onclick={(e: MouseEvent) => followPost(e, r.post!.url)}>
             <Icon name="far fa-comment" /> <span>{t('forum.stage.source', { title: r.post.title })}</span>
           </a>
         ) : null}
@@ -409,49 +390,9 @@ export default class WhoSaidItPage extends Page {
         {data.played.length ? (
           <div className="WsiRecap">
             <h3 className="WsiSection-title">{t('forum.done.answers')}</h3>
-            {data.played.map((r) => this.recap(r, true))}
+            {data.played.map((r) => recapRow(r, true))}
           </div>
         ) : null}
-      </div>
-    );
-  }
-
-  /** A quote with its answer, as a compact row: today's recap and yesterday's list. */
-  recap(r: Reveal, mine: boolean) {
-    const author = user(r.author);
-    if (r.withdrawn) {
-      return (
-        <div className="WsiRecapRow is-withdrawn">
-          <span className="WsiRecapRow-n">{r.position}</span>
-          <p className="WsiRecapRow-quote">{t('forum.recap.withdrawn')}</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className={classList('WsiRecapRow', mine && (r.correct ? 'is-right' : 'is-wrong'))}>
-        <span className="WsiRecapRow-n">{r.position}</span>
-        <div className="WsiRecapRow-body">
-          <p className="WsiRecapRow-quote">“{r.excerpt}”</p>
-          <div className="WsiRecapRow-meta">
-            <span className="WsiRecapRow-author">
-              <Avatar user={author} className="Avatar--small" /> {author ? author.displayName() : t('forum.stage.deleted')}
-            </span>
-            {mine ? (
-              <span className="WsiRecapRow-result">
-                <Icon name={r.correct ? 'fas fa-check' : 'fas fa-xmark'} />{' '}
-                {r.correct ? t('forum.stage.points', { points: r.points }) : t('forum.recap.missed')}
-              </span>
-            ) : r.percent !== null && r.percent !== undefined ? (
-              <span className="WsiRecapRow-result">{t('forum.recap.percent', { percent: r.percent })}</span>
-            ) : null}
-            {r.post ? (
-              <a className="WsiRecapRow-link" href={r.post.url} onclick={(e: MouseEvent) => this.follow(e, r.post!.url)}>
-                {t('forum.recap.read')} <Icon name="fas fa-arrow-right" />
-              </a>
-            ) : null}
-          </div>
-        </div>
       </div>
     );
   }
@@ -480,105 +421,6 @@ export default class WhoSaidItPage extends Page {
           {t('forum.settings.remind')}
         </Switch>
       </div>
-    );
-  }
-
-  boards(data: PageData) {
-    const rows =
-      this.board === 'today'
-        ? (data.day?.top || []).map((row) => ({
-            user: row.user,
-            main: row.score,
-            sub: t('forum.boards.today_sub', { correct: row.correct, count: data.day?.count || 5 }),
-            grid: row.grid,
-          }))
-        : (this.leaders || []).map((player) => {
-            const member = player.user();
-            return {
-              user: member ? Number(member.id()) : 0,
-              main: player.totalScore(),
-              sub: t('forum.boards.all_sub', { quizzes: player.quizzes(), best: player.bestStreak() }),
-              grid: null as string | null,
-            };
-          });
-
-    return (
-      <section className="WsiBoard">
-        <div className="WsiBoard-head">
-          <h3 className="WsiSection-title">
-            <Icon name="fas fa-trophy" /> {t('forum.boards.title')}
-          </h3>
-          <div className="WsiTabs" role="tablist">
-            {(['today', 'all'] as const).map((tab) => (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={this.board === tab ? 'true' : 'false'}
-                className={classList('WsiTab', this.board === tab && 'is-active')}
-                onclick={() => {
-                  this.board = tab;
-                  if (tab === 'all') this.loadLeaders();
-                }}
-              >
-                {t(`forum.boards.${tab}`)}
-              </button>
-            ))}
-          </div>
-        </div>
-        {this.board === 'all' && !this.leaders ? (
-          <LoadingIndicator display="block" size="small" />
-        ) : rows.length ? (
-          <ol className="WsiBoard-list">
-            {rows.map((row, i) => {
-              const u = user(row.user);
-              return (
-                <li className={classList('WsiBoard-row', u && app.session.user?.id() === u.id() && 'is-me')}>
-                  <span className={classList('WsiBoard-rank', i < 3 && `is-medal is-${i + 1}`)}>{i + 1}</span>
-                  <Avatar user={u} className="Avatar--small" />
-                  <span className="WsiBoard-who">
-                    {u ? (
-                      <Link className="WsiBoard-name" href={app.route('user', { username: u.slug() })}>
-                        {u.displayName()}
-                      </Link>
-                    ) : (
-                      <span className="WsiBoard-name">{t('forum.stage.deleted')}</span>
-                    )}
-                    <span className="WsiBoard-sub">{row.sub}</span>
-                  </span>
-                  {row.grid ? (
-                    <span className="WsiPips" aria-hidden="true">
-                      {row.grid.split('').map((l) => (
-                        <span className={`WsiPip WsiPip--${l === '-' ? 'open' : l}`} />
-                      ))}
-                    </span>
-                  ) : null}
-                  <span className="WsiBoard-score">{row.main}</span>
-                </li>
-              );
-            })}
-          </ol>
-        ) : (
-          <p className="WsiBoard-empty">{this.board === 'today' ? t('forum.boards.today_empty') : t('forum.boards.all_empty')}</p>
-        )}
-      </section>
-    );
-  }
-
-  yesterday(data: PageData) {
-    const y = data.yesterday;
-
-    return (
-      <section className="WsiYesterday">
-        <h3 className="WsiSection-title">
-          <Icon name="fas fa-clock-rotate-left" /> {t('forum.yesterday.title')}
-          {y ? <span className="WsiSection-date">{dayLabel(y.date)}</span> : null}
-        </h3>
-        {y && y.questions.length ? (
-          <div className="WsiRecap">{y.questions.map((r) => this.recap(r, false))}</div>
-        ) : (
-          <p className="WsiBoard-empty">{t('forum.yesterday.empty')}</p>
-        )}
-      </section>
     );
   }
 
@@ -613,7 +455,7 @@ export default class WhoSaidItPage extends Page {
         this.reveal = null;
         this.phase = 'done';
         // The boards and the recap now include this member's day.
-        if (this.leaders) this.loadLeaders(true);
+        this.finishes++;
         return call<PageData>('GET', '').then((data) => {
           this.data = data;
           pushUsers(data.users);
@@ -692,15 +534,6 @@ export default class WhoSaidItPage extends Page {
         this.remindSaving = false;
         m.redraw();
       });
-  }
-
-  /** A link to a post on this forum opens in the app; anything else as a link would. */
-  follow(e: MouseEvent, url: string) {
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-    const base = app.forum.attribute<string>('baseUrl');
-    if (url.indexOf(base) !== 0) return;
-    e.preventDefault();
-    m.route.set(url.slice(base.length) || '/');
   }
 
   /** 1–4 pick a face, Enter goes on — unless the member is typing somewhere. */

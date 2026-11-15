@@ -10,7 +10,6 @@ use Illuminate\Cache\Repository;
 use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Database\ConnectionInterface;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 
 /**
@@ -124,16 +123,10 @@ class Quiz
 
             $this->startScore($day, $actor);
 
-            $a = new Answer();
-            $a->question_id = $q->id;
-            $a->user_id = $actor->id;
-            $a->shown_ms = Carbon::now()->getTimestampMs();
-            try {
-                $a->save();
-            } catch (QueryException) {
-                // A double tap raced us: the first one's clock stands.
-                $a = Answer::query()->where('question_id', $q->id)->where('user_id', $actor->id)->firstOrFail();
-            }
+            // The clock starts now. A double tap that raced this one is a no-op on the unique
+            // (question, member) key, and both read back the same row: the first one's clock stands.
+            Answer::query()->insertOrIgnore(['question_id' => $q->id, 'user_id' => $actor->id, 'shown_ms' => Carbon::now()->getTimestampMs()]);
+            $a = Answer::query()->where('question_id', $q->id)->where('user_id', $actor->id)->firstOrFail();
 
             return ['question' => $q, 'answer' => $a];
         }
@@ -145,20 +138,13 @@ class Quiz
 
     private function startScore(Day $day, User $actor): void
     {
-        if (Score::query()->where('day_id', $day->id)->where('user_id', $actor->id)->exists()) {
-            return;
-        }
-
-        $score = new Score();
-        $score->day_id = $day->id;
-        $score->user_id = $actor->id;
-        $score->grid = str_repeat(Scoring::OPEN, $day->question_count);
-        $score->started_at = Carbon::now();
-        try {
-            $score->save();
-        } catch (QueryException) {
-            // Made by a racing request.
-        }
+        // The unique (day, member) key makes a racing second request a no-op.
+        Score::query()->insertOrIgnore([
+            'day_id' => $day->id,
+            'user_id' => $actor->id,
+            'grid' => str_repeat(Scoring::OPEN, $day->question_count),
+            'started_at' => Carbon::now(),
+        ]);
     }
 
     /**
@@ -190,10 +176,34 @@ class Quiz
         }
 
         $ms = (int) max(0, Carbon::now()->getTimestampMs() - $answer->shown_ms);
+        $recorded = $this->record($actor, $day, $question, $answer, $choice, $ms);
+
+        $answer->refresh();
+        if (! $recorded) {
+            return ['wsi_answered', $answer];
+        }
+
+        $questions = $this->questions($day);
+        $live = $this->live($questions);
+        $answers = $this->answers($questions, $actor);
+        if (! $questions->contains(fn (Question $q) => isset($live[$q->id]) && ! $answers->get($q->id)?->answered_at)) {
+            $this->finish($day, $actor->id, $questions, $live);
+        }
+
+        return [null, $answer];
+    }
+
+    /**
+     * Record an answer and add it to the member's day, once: the guarded
+     * UPDATE only matches an answer not yet given, so a second tap records
+     * nothing. False when it had already been answered.
+     */
+    private function record(User $actor, Day $day, Question $question, Answer $answer, int $choice, int $ms): bool
+    {
         $correct = $choice === $question->author_id;
         $points = Scoring::points($correct, $ms);
 
-        $recorded = $this->exclusive($actor->id, fn () => $this->db->transaction(function () use ($answer, $choice, $correct, $points, $ms, $day, $actor, $question) {
+        return $this->exclusive($actor->id, fn () => $this->db->transaction(function () use ($answer, $choice, $correct, $points, $ms, $day, $actor, $question) {
             $updated = Answer::query()->whereKey($answer->id)->whereNull('answered_at')->update([
                 'answered_at' => Carbon::now(),
                 'choice_id' => $choice,
@@ -219,20 +229,6 @@ class Quiz
 
             return true;
         }));
-
-        $answer->refresh();
-        if (! $recorded) {
-            return ['wsi_answered', $answer];
-        }
-
-        $questions = $this->questions($day);
-        $live = $this->live($questions);
-        $answers = $this->answers($questions, $actor);
-        if (! $questions->contains(fn (Question $q) => isset($live[$q->id]) && ! $answers->get($q->id)?->answered_at)) {
-            $this->finish($day, $actor->id, $questions, $live);
-        }
-
-        return [null, $answer];
     }
 
     /**
@@ -347,11 +343,8 @@ class Quiz
             return $player;
         }
 
-        try {
-            $this->db->table('who_said_it_players')->insert(['user_id' => $userId]);
-        } catch (QueryException) {
-            // Made by a racing request.
-        }
+        // The primary key makes a racing second request a no-op.
+        Player::query()->insertOrIgnore(['user_id' => $userId]);
         $query = Player::query()->whereKey($userId);
 
         return ($lock ? $query->lockForUpdate()->first() : $query->first()) ?? throw new \RuntimeException('player row missing');

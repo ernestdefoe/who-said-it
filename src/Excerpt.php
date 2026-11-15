@@ -37,6 +37,34 @@ final class Excerpt
             return '';
         }
 
+        $root = self::clean($html, $source);
+        if (! $root) {
+            return '';
+        }
+
+        $text = self::text($root);
+        $text = preg_replace('~(?:https?://|www\.)\S+~iu', '', $text) ?? '';
+        $text = preg_replace('/\s+/u', ' ', $text) ?? '';
+        $text = trim($text, " \t\n\r\0\x0B-–—:;,");
+
+        foreach (array_unique(array_filter($names, fn ($n) => mb_strlen($n) >= 2)) as $name) {
+            $text = preg_replace('/(?<![\p{L}\p{N}_])@?'.preg_quote($name, '/').'(?![\p{L}\p{N}_])/iu', '[…]', $text) ?? $text;
+        }
+
+        // A mention taken from the front leaves "you asked…": start like a sentence.
+        $text = mb_strtoupper(mb_substr($text, 0, 1)).mb_substr($text, 1);
+
+        return self::shorten($text, $max);
+    }
+
+    /**
+     * The post as a DOM with only the author's own words left: quotes of other
+     * posts, mentions, code, media and spoilers out, paragraphs another
+     * extension added out, links reduced to their words (unless the words are
+     * the address).
+     */
+    private static function clean(string $html, ?string $source): ?DOMNode
+    {
         $doc = new DOMDocument();
         $previous = libxml_use_internal_errors(true);
         $doc->loadHTML('<?xml encoding="utf-8"?><div id="wsi-root">'.$html.'</div>', LIBXML_NONET | LIBXML_NOBLANKS);
@@ -46,7 +74,7 @@ final class Excerpt
         $xpath = new DOMXPath($doc);
         $root = $xpath->query('//*[@id="wsi-root"]')->item(0);
         if (! $root) {
-            return '';
+            return null;
         }
 
         $drop = implode(' | ', array_map(fn ($tag) => './/'.$tag, self::DROP));
@@ -73,19 +101,7 @@ final class Excerpt
             $link->parentNode?->replaceChild($doc->createTextNode($keep ? $link->textContent : ''), $link);
         }
 
-        $text = self::text($root);
-        $text = preg_replace('~(?:https?://|www\.)\S+~iu', '', $text) ?? '';
-        $text = preg_replace('/\s+/u', ' ', $text) ?? '';
-        $text = trim($text, " \t\n\r\0\x0B-–—:;,");
-
-        foreach (array_unique(array_filter($names, fn ($n) => mb_strlen($n) >= 2)) as $name) {
-            $text = preg_replace('/(?<![\p{L}\p{N}_])@?'.preg_quote($name, '/').'(?![\p{L}\p{N}_])/iu', '[…]', $text) ?? $text;
-        }
-
-        // A mention taken from the front leaves "you asked…": start like a sentence.
-        $text = mb_strtoupper(mb_substr($text, 0, 1)).mb_substr($text, 1);
-
-        return self::shorten($text, $max);
+        return $root;
     }
 
     private static function squash(string $text): string

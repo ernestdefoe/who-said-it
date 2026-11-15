@@ -10,7 +10,6 @@ use Flarum\Api\Context;
 use Flarum\Api\Endpoint;
 use Flarum\Api\Resource\AbstractDatabaseResource;
 use Flarum\Api\Schema;
-use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Tobyz\JsonApiServer\Context as BaseContext;
 use Tobyz\JsonApiServer\Pagination\Pagination;
@@ -35,7 +34,6 @@ class PlayerResource extends AbstractDatabaseResource
     public function __construct(
         private readonly Clock $clock,
         private readonly Board $board,
-        private readonly ConnectionInterface $db,
     ) {
     }
 
@@ -65,7 +63,7 @@ class PlayerResource extends AbstractDatabaseResource
     {
         $actor = $context->getActor();
         if (! $actor->isGuest() && (int) $id === $actor->id) {
-            $this->db->table('who_said_it_players')->insertOrIgnore(['user_id' => $actor->id]);
+            Player::query()->insertOrIgnore(['user_id' => $actor->id]);
         }
 
         return parent::find($id, $context);

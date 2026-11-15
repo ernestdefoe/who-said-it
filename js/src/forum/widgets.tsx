@@ -15,6 +15,11 @@ export const KEY = 'whoSaidItToday';
  * installed. FoF's is opt-in: shown only where the admin placed it.
  */
 export function registerWidgets(): void {
+  registerBespoke();
+  if (hasFofWidgets() && (app as any).widgets) registerFof();
+}
+
+function registerBespoke(): void {
   const g = globalThis as any;
 
   if (g.flarum?.extensions && 'ernestdefoe-bespoke' in g.flarum.extensions) {
@@ -29,42 +34,42 @@ export function registerWidgets(): void {
       component: { view: () => m(TodayCard, { flat: true }) },
     });
   }
+}
 
-  if (hasFofWidgets() && (app as any).widgets) {
-    const Widgets = fof('common/extend/Widgets');
-    const WidgetBase = fof('common/components/Widget') as { new (...args: any[]): any } | undefined;
-    if (!Widgets || !WidgetBase) return;
+function registerFof(): void {
+  const Widgets = fof('common/extend/Widgets');
+  const WidgetBase = fof('common/components/Widget') as { new (...args: any[]): any } | undefined;
+  if (!Widgets || !WidgetBase) return;
 
-    class TodayFofWidget extends WidgetBase {
-      className() {
-        return 'WsiFofWidget FofWidgets-Widget--flat';
-      }
-      header() {
-        return null;
-      }
-      icon() {
-        return 'fas fa-quote-left';
-      }
-      title() {
-        return t('forum.card.title');
-      }
-      content() {
-        return m(TodayCard, { flat: true });
-      }
+  class TodayFofWidget extends WidgetBase {
+    className() {
+      return 'WsiFofWidget FofWidgets-Widget--flat';
     }
-
-    new Widgets()
-      .add({
-        key: KEY,
-        component: TodayFofWidget,
-        // 🚨 Opt-in: only where the admin placed it in FoF's layout editor.
-        isDisabled: () => !placed(app, EXT, KEY) || !today(),
-        isUnique: true,
-        placement: 'start_top',
-        position: 0,
-      })
-      .extend(app, EXT);
-
-    m.redraw();
+    header() {
+      return null;
+    }
+    icon() {
+      return 'fas fa-quote-left';
+    }
+    title() {
+      return t('forum.card.title');
+    }
+    content() {
+      return m(TodayCard, { flat: true });
+    }
   }
+
+  new Widgets()
+    .add({
+      key: KEY,
+      component: TodayFofWidget,
+      // 🚨 Opt-in: only where the admin placed it in FoF's layout editor.
+      isDisabled: () => !placed(app, EXT, KEY) || !today(),
+      isUnique: true,
+      placement: 'start_top',
+      position: 0,
+    })
+    .extend(app, EXT);
+
+  m.redraw();
 }
